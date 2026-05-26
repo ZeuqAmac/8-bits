@@ -125,3 +125,81 @@ kbd {
   .ctrl-title { font-size: 7px; }
   .keys, kbd { font-size: 8px; }
 }
+
+/* ---------- Controles tactiles (solo touch) ---------- */
+#touch-controls {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  display: none;
+  font-family: 'Press Start 2P', monospace;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  #touch-controls { display: block; }
+  /* En movil ocultamos el panel de teclado */
+  #controls { display: none; }
+}
+
+.t-dpad, .t-actions {
+  position: absolute;
+  bottom: 8px;
+  pointer-events: none;
+}
+.t-dpad   { left: 8px; }
+.t-actions { right: 8px; }
+
+.t-btn {
+  pointer-events: auto;
+  background: rgba(40, 20, 60, 0.55);
+  border: 2px solid rgba(255, 210, 58, 0.7);
+  color: #ffd23a;
+  font-family: inherit;
+  font-weight: bold;
+  border-radius: 50%;
+  width: 56px;
+  height: 56px;
+  font-size: 16px;
+  margin: 4px;
+  cursor: pointer;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.6), inset 0 0 10px rgba(0,0,0,0.4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-shadow: 0 0 4px rgba(255, 210, 58, 0.6);
+  -webkit-tap-highlight-color: transparent;
+}
+.t-btn:active {
+  background: rgba(255, 210, 58, 0.45);
+  color: #1a0f2e;
+  transform: translateY(2px);
+  box-shadow: 0 0 0 rgba(0,0,0,0);
+}
+
+.t-left, .t-right { display: inline-flex; }
+
+.t-jump  { background: rgba(40, 80, 200, 0.55); border-color: #6aa0ff; color: #cfe3ff; text-shadow: 0 0 4px #6aa0ff; }
+.t-punch { background: rgba(200, 30, 30, 0.6);  border-color: #ff7a7a; color: #ffdada; text-shadow: 0 0 4px #ff7a7a; }
+.t-jump:active  { background: rgba(150, 200, 255, 0.6); color: #001030; }
+.t-punch:active { background: rgba(255, 200, 200, 0.6); color: #300000; }
+
+.t-start {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 60px;
+  height: 24px;
+  border-radius: 4px;
+  font-size: 8px;
+  margin: 0;
+}
+
+/* Tamano ajustado en pantallas chicas */
+@media (max-width: 480px) {
+  .t-btn { width: 52px; height: 52px; font-size: 14px; }
+  .t-start { width: 56px; height: 22px; font-size: 7px; }
+}

@@ -91,6 +91,27 @@ function pressed(...ks) {
 }
 function clearOnce() { for (const k in onceKeys) onceKeys[k] = false; }
 
+// Touch controls (D-pad + A/B) - mapean al mismo sistema de teclas
+function pressKey(k) {
+  k = k.toLowerCase();
+  if (!keys[k]) onceKeys[k] = true;
+  keys[k] = true;
+  ensureAudio();
+}
+function releaseKey(k) { keys[k.toLowerCase()] = false; }
+
+document.querySelectorAll('.t-btn').forEach(btn => {
+  const k = btn.dataset.key;
+  const down = e => { e.preventDefault(); pressKey(k); };
+  const up   = e => { e.preventDefault(); releaseKey(k); };
+  btn.addEventListener('touchstart', down, { passive: false });
+  btn.addEventListener('touchend', up,   { passive: false });
+  btn.addEventListener('touchcancel', up, { passive: false });
+  btn.addEventListener('mousedown', down);
+  btn.addEventListener('mouseup', up);
+  btn.addEventListener('mouseleave', up);
+});
+
 // ---------- Audio (Web Audio beeps tipo 8-bit) ----------
 let actx = null;
 function ensureAudio() {
