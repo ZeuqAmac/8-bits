@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MOREZOMBI: La Catedral Maldita</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="arcade">
+    <div id="marquee">
+      <span class="m-red">MOREZOMBI</span>
+      <span class="m-yel">: LA CATEDRAL MALDITA</span>
+    </div>
+
+    <div id="screen-wrap">
+      <canvas id="game" width="512" height="384"></canvas>
+      <div id="scanlines"></div>
+    </div>
+
+    <div id="controls">
+      <div class="ctrl-block">
+        <div class="ctrl-title">MOVER</div>
+        <div class="keys">
+          <kbd>&larr;</kbd><kbd>&rarr;</kbd>
+        </div>
+      </div>
+      <div class="ctrl-block">
+        <div class="ctrl-title">SALTAR</div>
+        <div class="keys"><kbd>Z</kbd> / <kbd>&uarr;</kbd></div>
+      </div>
+      <div class="ctrl-block">
+        <div class="ctrl-title">GOLPE</div>
+        <div class="keys"><kbd>X</kbd> / <kbd>ESPACIO</kbd></div>
+      </div>
+      <div class="ctrl-block">
+        <div class="ctrl-title">START</div>
+        <div class="keys"><kbd>ENTER</kbd></div>
+      </div>
+    </div>
+
+    <div id="legend">INSERT COIN &mdash; 1993 MEXI-PIX</div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: #0a0a0f;
+  color: #fff;
+  font-family: 'Press Start 2P', monospace;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 20px;
+}
+
+#arcade {
+  background: linear-gradient(180deg, #1a0f2e 0%, #2a1845 60%, #1a0f2e 100%);
+  border: 6px solid #444;
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 20px rgba(0,0,0,0.6),
+    0 0 40px rgba(120, 60, 200, 0.4),
+    0 0 80px rgba(60, 20, 120, 0.25);
+  padding: 24px;
+  width: 100%;
+  max-width: 620px;
+}
+
+#marquee {
+  text-align: center;
+  font-size: 18px;
+  letter-spacing: 1px;
+  margin-bottom: 16px;
+  text-shadow: 0 0 8px rgba(255, 80, 80, 0.6);
+  line-height: 1.4;
+}
+.m-red { color: #ff3a3a; }
+.m-yel { color: #ffd23a; font-size: 11px; }
+
+#screen-wrap {
+  position: relative;
+  background: #000;
+  border: 4px solid #2a2a2a;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: inset 0 0 30px rgba(0,0,0,0.9);
+  width: 100%;
+  aspect-ratio: 4 / 3;
+}
+
+#game {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  -ms-interpolation-mode: nearest-neighbor;
+}
+
+#scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    to bottom,
+    rgba(0,0,0,0) 0px,
+    rgba(0,0,0,0) 2px,
+    rgba(0,0,0,0.25) 3px,
+    rgba(0,0,0,0.25) 4px
+  );
+  mix-blend-mode: multiply;
+}
+
+#controls {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.ctrl-block {
+  background: #14091f;
+  border: 2px solid #3a2a55;
+  border-radius: 4px;
+  padding: 8px 6px;
+  text-align: center;
+}
+
+.ctrl-title {
+  font-size: 8px;
+  color: #ffd23a;
+  margin-bottom: 6px;
+}
+
+.keys {
+  font-size: 10px;
+  color: #fff;
+}
+
+kbd {
+  display: inline-block;
+  background: #2a1845;
+  border: 1px solid #6b4ba0;
+  border-bottom-width: 3px;
+  border-radius: 3px;
+  padding: 3px 5px;
+  margin: 0 1px;
+  font-family: inherit;
+  font-size: 9px;
+  color: #fff;
+}
+
+#legend {
+  text-align: center;
+  margin-top: 14px;
+  font-size: 8px;
+  color: #888;
+  letter-spacing: 2px;
+}
+
+@media (max-width: 480px) {
+  #marquee { font-size: 14px; }
+  .m-yel { font-size: 9px; }
+  .ctrl-title { font-size: 7px; }
+  .keys, kbd { font-size: 8px; }
+}
