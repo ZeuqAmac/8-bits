@@ -1094,6 +1094,7 @@ function damagePlayer(dmg, knockbackDir) {
     if (player.lives <= 0) {
       state = 'gameover';
       gameOverTimer = 0;
+      saveBests();
       sfx.gameOver();
     } else {
       player.hp = player.maxHp;
@@ -1203,10 +1204,39 @@ let spawnCooldown = 0;
 let screenShake = 0;
 let bossesToSpawn = [];
 let projectiles = [];
+let mode = 'campaign'; // 'campaign' | 'horde'
+let menuIndex = 0;
+const modeKeys = ['campaign', 'horde'];
+const modeLabels = ['CAMPANA', 'HORDA'];
+const modeDescs = ['5 OLEADAS + JEFES', 'INFINITA - SOBREVIVE'];
 
-function isBossWave(w) { return w === maxWaves; }
+let highScore = 0;
+let hordeBestWave = 0;
+try {
+  highScore = parseInt(localStorage.getItem('morezombi_high') || '0') || 0;
+  hordeBestWave = parseInt(localStorage.getItem('morezombi_horde') || '0') || 0;
+} catch (e) {}
 
-function startGame() {
+function saveBests() {
+  try {
+    if (player.score > highScore) {
+      highScore = player.score;
+      localStorage.setItem('morezombi_high', String(highScore));
+    }
+    if (mode === 'horde' && wave > hordeBestWave) {
+      hordeBestWave = wave;
+      localStorage.setItem('morezombi_horde', String(hordeBestWave));
+    }
+  } catch (e) {}
+}
+
+function isBossWave(w) {
+  if (mode === 'campaign') return w === maxWaves;
+  return w > 0 && w % 5 === 0;
+}
+
+function startGame(selectedMode) {
+  mode = selectedMode || 'campaign';
   player = makePlayer();
   enemies = [];
   particles = [];
@@ -1220,13 +1250,22 @@ function startGame() {
 }
 
 function enemiesForWave(w) {
+  if (mode === 'horde') return Math.min(3 + w + Math.floor(w / 2), 14);
   return 2 + w;
 }
 
 function setupWave(w) {
   if (isBossWave(w)) {
-    toSpawn = 0;
-    bossesToSpawn = ['boss1', 'boss2', 'boss3'];
+    if (mode === 'campaign') {
+      toSpawn = 0;
+      bossesToSpawn = ['boss1', 'boss2', 'boss3'];
+    } else {
+      // Horda: 1 jefe rotando + algunos morezombis
+      const bossOrder = ['boss1', 'boss2', 'boss3'];
+      const idx = Math.floor(w / 5 - 1) % 3;
+      bossesToSpawn = [bossOrder[(idx + 3) % 3]];
+      toSpawn = Math.min(3 + Math.floor(w / 4), 6);
+    }
   } else {
     toSpawn = enemiesForWave(w);
     bossesToSpawn = [];
@@ -1236,16 +1275,16 @@ function setupWave(w) {
 
 function nextWave() {
   wave++;
-  if (wave > maxWaves) {
+  if (mode === 'campaign' && wave > maxWaves) {
     state = 'win';
     winTimer = 0;
+    saveBests();
     sfx.win();
     return;
   }
   waveBanner = isBossWave(wave) ? 180 : 120;
   setupWave(wave);
   sfx.wave();
-  // bonus hp pequeño
   player.hp = Math.min(player.maxHp, player.hp + 2);
 }
 
@@ -1256,8 +1295,11 @@ function nextWave() {
 function update() {
   if (state === 'title') {
     titleAnim++;
-    if (pressed('enter', ' ', 'z', 'x')) {
-      startGame();
+    if (pressed('arrowleft', 'a')) menuIndex = (menuIndex + modeKeys.length - 1) % modeKeys.length;
+    if (pressed('arrowright', 'd')) menuIndex = (menuIndex + 1) % modeKeys.length;
+    if (pressed('arrowup', 'arrowdown', 'w', 's')) menuIndex = (menuIndex + 1) % modeKeys.length;
+    if (pressed('enter', ' ', 'z', 'x', 'c')) {
+      startGame(modeKeys[menuIndex]);
     }
     clearOnce();
     return;
@@ -1753,7 +1795,7 @@ function drawHUD() {
 
   // Wave
   ctx.fillStyle = C.hudY;
-  ctx.fillText('OLEADA ' + wave + '/' + maxWaves, 220, 6);
+  ctx.fillText('OLEADA ' + wave + (mode === 'campaign' ? '/' + maxWaves : ''), 220, 6);
 
   // Score
   ctx.fillStyle = C.hudG;
@@ -1791,7 +1833,7 @@ function drawMiniHero(x, y) {
 // ============================================================
 
 function drawTitle() {
-  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillStyle = 'rgba(10, 5, 20, 0.7)';
   ctx.fillRect(0, 0, W, H);
 
   ctx.textAlign = 'center';
@@ -1821,17 +1863,42 @@ function drawTitle() {
   drawSprite(boss2Sprites.walk1, W / 2 + 50, 150, boss2Pal, PX, true);
   drawSprite(boss3Sprites.walk1, W / 2 + 95, 150, boss3Pal, PX, true);
 
-  // Press start (parpadeante)
-  if (Math.floor(titleAnim / 30) % 2 === 0) {
+  // === Menu de modo ===
+  ctx.font = '11px "Press Start 2P", monospace';
+  for (let i = 0; i < modeKeys.length; i++) {
+    const cx = W / 2 + (i === 0 ? -82 : 82);
+    const cy = 248;
+    const sel = (i === menuIndex);
+    // fondo opaco para que se lea sobre la catedral
+    ctx.fillStyle = sel ? 'rgba(60, 40, 15, 0.92)' : 'rgba(20, 10, 35, 0.85)';
+    ctx.fillRect(cx - 70, cy - 14, 140, 36);
+    ctx.strokeStyle = sel ? C.hudY : '#3a2a55';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(cx - 70, cy - 14, 140, 36);
+    ctx.fillStyle = sel ? C.hudY : '#7a6a8a';
+    ctx.fillText(modeLabels[i], cx, cy);
+    ctx.font = '6px "Press Start 2P", monospace';
+    ctx.fillStyle = sel ? C.white : '#5a4a6a';
+    ctx.fillText(modeDescs[i], cx, cy + 14);
     ctx.font = '11px "Press Start 2P", monospace';
-    ctx.fillStyle = C.hudG;
-    ctx.fillText('PULSA ENTER PARA EMPEZAR', W / 2, 280);
   }
 
-  ctx.font = '8px "Press Start 2P", monospace';
+  // High score
+  ctx.font = '7px "Press Start 2P", monospace';
+  ctx.fillStyle = C.hudG;
+  ctx.fillText('BEST ' + String(highScore).padStart(6, '0') + '   HORDA MAX OLEADA ' + hordeBestWave,
+               W / 2, 295);
+
+  // Hint parpadeante
+  if (Math.floor(titleAnim / 30) % 2 === 0) {
+    ctx.font = '10px "Press Start 2P", monospace';
+    ctx.fillStyle = C.hudY;
+    ctx.fillText('< - >  ELIGE MODO     ENTER / A  EMPEZAR', W / 2, 320);
+  }
+
+  ctx.font = '7px "Press Start 2P", monospace';
   ctx.fillStyle = '#888';
-  ctx.fillText('FLECHAS:MOVER  Z:SALTAR  X:GOLPE  C:DECRETO', W / 2, 320);
-  ctx.fillText('(C) 1993 MEXI-PIX', W / 2, 350);
+  ctx.fillText('Z SALTAR  X GOLPE  C DECRETO          1993 MEXI-PIX', W / 2, 350);
 
   ctx.textAlign = 'left';
 }
@@ -1846,10 +1913,11 @@ function drawWaveBanner() {
   ctx.fillRect(0, 140, W, 3);
   ctx.fillRect(0, 217, W, 3);
 
+  const isFinal = (mode === 'campaign' && wave === maxWaves);
   ctx.textAlign = 'center';
   ctx.font = '18px "Press Start 2P", monospace';
   ctx.fillStyle = boss ? C.embRed : C.hudY;
-  ctx.fillText(boss ? 'OLEADA FINAL' : 'OLEADA ' + wave, W / 2, 165);
+  ctx.fillText(isFinal ? 'OLEADA FINAL' : 'OLEADA ' + wave, W / 2, 165);
   ctx.font = '10px "Press Start 2P", monospace';
   ctx.fillStyle = C.white;
   ctx.fillText(boss ? 'LLEGAN LOS JEFES DE MORENA' : 'LOS MOREZOMBIS ATACAN', W / 2, 195);
@@ -1862,16 +1930,24 @@ function drawGameOver() {
   ctx.textAlign = 'center';
   ctx.font = '24px "Press Start 2P", monospace';
   ctx.fillStyle = C.heroMaskR;
-  ctx.fillText('GAME OVER', W / 2, 140);
+  ctx.fillText(mode === 'horde' ? 'HORDA FIN' : 'GAME OVER', W / 2, 130);
   ctx.font = '10px "Press Start 2P", monospace';
   ctx.fillStyle = C.white;
-  ctx.fillText('EL PRESIDENTE HA CAIDO', W / 2, 180);
-  ctx.fillText('LA CATEDRAL ESTA PERDIDA', W / 2, 205);
+  if (mode === 'horde') {
+    ctx.fillText('EL PRESIDENTE SUCUMBIO', W / 2, 170);
+    ctx.fillStyle = C.hudY;
+    ctx.fillText('SOBREVIVISTE HASTA OLEADA ' + wave, W / 2, 200);
+  } else {
+    ctx.fillText('EL PRESIDENTE HA CAIDO', W / 2, 170);
+    ctx.fillText('LA CATEDRAL ESTA PERDIDA', W / 2, 195);
+  }
   ctx.fillStyle = C.hudG;
-  ctx.fillText('SCORE FINAL: ' + String(player.score).padStart(6, '0'), W / 2, 240);
+  ctx.fillText('SCORE: ' + String(player.score).padStart(6, '0'), W / 2, 230);
+  ctx.fillStyle = (player.score >= highScore) ? C.hudY : '#aaa';
+  ctx.fillText('BEST:  ' + String(highScore).padStart(6, '0'), W / 2, 250);
   if (gameOverTimer > 60 && Math.floor(gameOverTimer / 30) % 2 === 0) {
     ctx.fillStyle = C.hudY;
-    ctx.fillText('PULSA ENTER PARA CONTINUAR', W / 2, 290);
+    ctx.fillText('PULSA ENTER PARA CONTINUAR', W / 2, 295);
   }
   ctx.textAlign = 'left';
 }
