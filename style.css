@@ -74,8 +74,8 @@ html, body {
 
 #controls {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
   margin-top: 18px;
 }
 
@@ -184,8 +184,11 @@ kbd {
 
 .t-jump  { background: rgba(40, 80, 200, 0.55); border-color: #6aa0ff; color: #cfe3ff; text-shadow: 0 0 4px #6aa0ff; }
 .t-punch { background: rgba(200, 30, 30, 0.6);  border-color: #ff7a7a; color: #ffdada; text-shadow: 0 0 4px #ff7a7a; }
+.t-throw { background: rgba(40, 140, 60, 0.6);  border-color: #6cf08c; color: #e0ffe0; text-shadow: 0 0 4px #6cf08c;
+           width: 44px; height: 44px; font-size: 12px; vertical-align: top; }
 .t-jump:active  { background: rgba(150, 200, 255, 0.6); color: #001030; }
 .t-punch:active { background: rgba(255, 200, 200, 0.6); color: #300000; }
+.t-throw:active { background: rgba(160, 240, 180, 0.6); color: #002010; }
 
 .t-start {
   position: absolute;

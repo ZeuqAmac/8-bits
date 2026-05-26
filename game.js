@@ -13,6 +13,17 @@ const WORLD_W = 1600;
 const GRAVITY = 0.55;
 const PX = 3;
 
+// Plataformas a lo largo del mundo
+const platforms = [
+  { x: 180,  y: GROUND_Y - 70, w: 78 },
+  { x: 360,  y: GROUND_Y - 110, w: 70 },
+  { x: 540,  y: GROUND_Y - 75, w: 80 },
+  { x: 820,  y: GROUND_Y - 95, w: 90 },
+  { x: 1040, y: GROUND_Y - 70, w: 78 },
+  { x: 1240, y: GROUND_Y - 110, w: 70 },
+  { x: 1420, y: GROUND_Y - 75, w: 80 }
+];
+
 // Paleta NES-inspired
 const C = {
   sky1: '#2a2848', sky2: '#7a5a7a', sky3: '#b89898',
@@ -158,7 +169,9 @@ const sfx = {
   win: () => {
     [523, 659, 784, 1047, 784, 1047, 1319].forEach((f, i) =>
       setTimeout(() => tone(f, 0.15, 'triangle', 0.09), i * 120));
-  }
+  },
+  throwShot: () => { tone(750, 0.08, 'square', 0.07, 1300); },
+  bossShot:  () => { tone(380, 0.1, 'sawtooth', 0.08, 220); }
 };
 
 // ---------- Helpers de dibujo de pixel art ----------
@@ -1017,6 +1030,78 @@ const bossNames = { boss1: 'EL CABALLERO', boss2: 'EL SABIO', boss3: 'LA DAMA' }
 // ENTIDADES
 // ============================================================
 
+// Física vertical compartida: gravedad + suelo + plataformas (top-solid)
+function applyVerticalPhysics(e) {
+  const feetPrev = e.y + e.h;
+  e.vy += GRAVITY;
+  e.y += e.vy;
+  const feetNow = e.y + e.h;
+  e.onGround = false;
+
+  if (feetNow >= GROUND_Y) {
+    e.y = GROUND_Y - e.h;
+    e.vy = 0;
+    e.onGround = true;
+    return;
+  }
+  // Plataformas: solo aterrizar cayendo desde arriba
+  if (e.vy >= 0) {
+    for (const pl of platforms) {
+      const overlapX = e.x + e.w > pl.x + 2 && e.x < pl.x + pl.w - 2;
+      if (!overlapX) continue;
+      if (feetPrev <= pl.y + 2 && feetNow >= pl.y) {
+        e.y = pl.y - e.h;
+        e.vy = 0;
+        e.onGround = true;
+        return;
+      }
+    }
+  }
+}
+
+function damageEnemy(e, dmg, knockback) {
+  e.hp -= dmg;
+  e.hurtTimer = 14;
+  e.flash = 8;
+  e.vx = knockback;
+  spawnParticle(e.x + e.w / 2, e.y + e.h / 2, C.blood, 8);
+  screenShake = 4;
+  sfx.hit();
+  if (e.hp <= 0) {
+    e.dead = true;
+    e.deathTimer = 40;
+    player.score += (e.score || 100);
+    const partColor = e.kind === 'zombie' ? C.zSkinDark : C.embRed;
+    spawnParticle(e.x + e.w / 2, e.y + e.h / 2, partColor, 12);
+    sfx.zombieDie();
+  }
+}
+
+function damagePlayer(dmg, knockbackDir) {
+  if (player.invuln > 0) return;
+  player.hp -= dmg;
+  player.hurtTimer = 20;
+  player.invuln = 60;
+  player.flash = 30;
+  player.vx = knockbackDir * 5;
+  player.vy = -3;
+  player.onGround = false;
+  screenShake = 8;
+  sfx.hurt();
+  spawnParticle(player.x + player.w / 2, player.y + player.h / 2, C.blood, 6);
+  if (player.hp <= 0) {
+    player.lives--;
+    if (player.lives <= 0) {
+      state = 'gameover';
+      gameOverTimer = 0;
+      sfx.gameOver();
+    } else {
+      player.hp = player.maxHp;
+      player.invuln = 120;
+    }
+  }
+}
+
 function makePlayer() {
   return {
     x: 60, y: GROUND_Y - 54,
@@ -1033,7 +1118,8 @@ function makePlayer() {
     hp: 5, maxHp: 5,
     lives: 3,
     score: 0,
-    flash: 0
+    flash: 0,
+    throwCooldown: 0
   };
 }
 
@@ -1054,7 +1140,9 @@ function makeZombie(x) {
     flash: 0,
     dead: false,
     kind: 'zombie',
-    score: 100
+    score: 100,
+    jumpCooldown: 120 + Math.random() * 180,
+    onGround: true
   };
 }
 
@@ -1075,7 +1163,10 @@ function makeBoss(x, kind) {
     flash: 0,
     dead: false,
     kind: kind,
-    score: 500
+    score: 500,
+    throwCooldown: 90 + Math.random() * 90,
+    jumpCooldown: 60 + Math.random() * 120,
+    onGround: true
   };
 }
 
@@ -1111,6 +1202,7 @@ let toSpawn = 0;
 let spawnCooldown = 0;
 let screenShake = 0;
 let bossesToSpawn = [];
+let projectiles = [];
 
 function isBossWave(w) { return w === maxWaves; }
 
@@ -1118,6 +1210,7 @@ function startGame() {
   player = makePlayer();
   enemies = [];
   particles = [];
+  projectiles = [];
   camera.x = 0;
   wave = 1;
   waveBanner = 120;
@@ -1195,6 +1288,7 @@ function update() {
 
   updatePlayer();
   updateEnemies();
+  updateProjectiles();
   updateParticles();
   updateCamera();
   updateSpawning();
@@ -1232,7 +1326,7 @@ function updatePlayer() {
       p.onGround = false;
       sfx.jump();
     }
-    // golpe
+    // golpe melee
     if (pressed('x', ' ') && p.punchTimer === 0) {
       p.punchTimer = 18;
       sfx.punch();
@@ -1244,40 +1338,36 @@ function updatePlayer() {
         if (e.dead) continue;
         if (e.x + e.w > hx && e.x < hx + hw &&
             e.y + e.h > hy && e.y < hy + hh) {
-          e.hp -= 1;
-          e.hurtTimer = 14;
-          e.flash = 8;
-          e.vx = p.facing * 3;
-          spawnParticle(e.x + e.w / 2, e.y + e.h / 2, C.blood, 8);
-          screenShake = 4;
-          sfx.hit();
-          if (e.hp <= 0) {
-            e.dead = true;
-            e.deathTimer = 40;
-            p.score += (e.score || 100);
-            const partColor = e.kind === 'zombie' ? C.zSkinDark : C.embRed;
-            spawnParticle(e.x + e.w / 2, e.y + e.h / 2, partColor, 12);
-            sfx.zombieDie();
-          }
+          damageEnemy(e, 1, p.facing * 3);
         }
       }
+    }
+    // ataque a distancia (Decreto presidencial)
+    if (pressed('c') && p.throwCooldown <= 0) {
+      p.throwCooldown = 24;
+      p.punchTimer = 12;
+      sfx.throwShot();
+      projectiles.push({
+        x: p.x + (p.facing > 0 ? p.w - 4 : -4),
+        y: p.y + 22,
+        vx: p.facing * 7, vy: 0,
+        w: 12, h: 8,
+        owner: 'player',
+        kind: 'decree',
+        life: 90
+      });
     }
   } else {
     p.vx *= 0.6;
   }
 
   if (p.punchTimer > 0) p.punchTimer--;
+  if (p.throwCooldown > 0) p.throwCooldown--;
 
-  // física vertical
-  p.vy += GRAVITY;
-  p.y += p.vy;
+  // física vertical con plataformas
   p.x += p.vx;
+  applyVerticalPhysics(p);
 
-  if (p.y + p.h >= GROUND_Y) {
-    p.y = GROUND_Y - p.h;
-    p.vy = 0;
-    p.onGround = true;
-  }
   // límites
   if (p.x < 0) p.x = 0;
   if (p.x + p.w > WORLD_W) p.x = WORLD_W - p.w;
@@ -1310,62 +1400,74 @@ function updateEnemies() {
       continue;
     }
 
+    if (e.throwCooldown > 0) e.throwCooldown--;
+    if (e.jumpCooldown > 0) e.jumpCooldown--;
+
     if (e.hurtTimer > 0) {
       e.hurtTimer--;
       e.x += e.vx;
       e.vx *= 0.8;
+      applyVerticalPhysics(e);
       continue;
     }
 
-    // IA simple: caminar hacia el jugador, atacar cerca
+    // IA: caminar hacia el jugador, atacar cerca o disparar lejos
     const dx = (player.x + player.w / 2) - (e.x + e.w / 2);
+    const dy = (player.y + player.h / 2) - (e.y + e.h / 2);
     e.facing = dx > 0 ? 1 : -1;
     const adx = Math.abs(dx);
+    const isBoss = e.kind !== 'zombie';
 
     if (e.attackTimer > 0) {
       e.attackTimer--;
-      // golpear al final del ataque
-      if (e.attackTimer === 8) {
+      // golpear al final del ataque melee
+      if (e.attackTimer === 8 && !e.isThrowing) {
         const hx = e.x + (e.facing > 0 ? e.w : -18);
         const hy = e.y + 20;
         const hw = 20, hh = 24;
         if (player.x + player.w > hx && player.x < hx + hw &&
-            player.y + player.h > hy && player.y < hy + hh &&
-            player.invuln === 0) {
-          player.hp--;
-          player.hurtTimer = 20;
-          player.invuln = 60;
-          player.flash = 30;
-          player.vx = e.facing * 5;
-          player.vy = -3;
-          player.onGround = false;
-          screenShake = 8;
-          sfx.hurt();
-          spawnParticle(player.x + player.w / 2, player.y + player.h / 2, C.blood, 6);
-          if (player.hp <= 0) {
-            player.lives--;
-            if (player.lives <= 0) {
-              state = 'gameover';
-              gameOverTimer = 0;
-              sfx.gameOver();
-            } else {
-              player.hp = player.maxHp;
-              player.invuln = 120;
-            }
-          }
+            player.y + player.h > hy && player.y < hy + hh) {
+          damagePlayer(1, e.facing);
         }
       }
-    } else if (adx < 30) {
-      // atacar
+      // soltar proyectil de jefe
+      if (e.attackTimer === 14 && e.isThrowing) {
+        projectiles.push({
+          x: e.x + (e.facing > 0 ? e.w - 4 : -4),
+          y: e.y + 20,
+          vx: e.facing * 4.2, vy: 0,
+          w: 12, h: 10,
+          owner: 'boss',
+          kind: 'book',
+          life: 140
+        });
+        sfx.bossShot();
+        e.isThrowing = false;
+      }
+    } else if (adx < 30 && Math.abs(dy) < 30) {
+      // ataque melee
       e.attackTimer = 30;
       e.vx = 0;
+    } else if (isBoss && e.throwCooldown <= 0 && adx > 90 && adx < 340 && Math.abs(dy) < 60) {
+      // ataque a distancia (solo jefes)
+      e.attackTimer = 30;
+      e.isThrowing = true;
+      e.vx = 0;
+      e.throwCooldown = 110 + Math.random() * 70;
     } else {
-      // caminar
+      // caminar; saltar de vez en cuando para alcanzar plataformas
       e.vx = e.facing * e.speed;
+      if (e.onGround && e.jumpCooldown <= 0 && dy < -20 && adx < 220) {
+        e.vy = -9;
+        e.jumpCooldown = 90 + Math.random() * 90;
+      } else if (e.onGround && e.jumpCooldown <= 0 && Math.random() < 0.01) {
+        e.vy = isBoss ? -8.5 : -7;
+        e.jumpCooldown = 150 + Math.random() * 150;
+      }
     }
 
     e.x += e.vx;
-    e.y += e.vy;
+    applyVerticalPhysics(e);
 
     e.animTimer++;
     if (e.animTimer > 14) {
@@ -1410,6 +1512,37 @@ function updateSpawning() {
   }
 }
 
+function updateProjectiles() {
+  for (const pr of projectiles) {
+    pr.x += pr.vx;
+    pr.y += pr.vy;
+    pr.life--;
+    if (pr.owner === 'player') {
+      for (const e of enemies) {
+        if (e.dead) continue;
+        if (pr.x + pr.w > e.x && pr.x < e.x + e.w &&
+            pr.y + pr.h > e.y + 8 && pr.y < e.y + e.h - 4) {
+          damageEnemy(e, 1, (pr.vx > 0 ? 1 : -1) * 2);
+          pr.life = 0;
+          break;
+        }
+      }
+    } else if (pr.owner === 'boss') {
+      const pl = player;
+      if (pl.invuln === 0 &&
+          pr.x + pr.w > pl.x && pr.x < pl.x + pl.w &&
+          pr.y + pr.h > pl.y + 8 && pr.y < pl.y + pl.h - 4) {
+        damagePlayer(1, pr.vx > 0 ? 1 : -1);
+        pr.life = 0;
+      }
+    }
+    // fuera de cámara
+    const sx = pr.x - camera.x;
+    if (sx < -30 || sx > W + 30) pr.life = 0;
+  }
+  projectiles = projectiles.filter(p => p.life > 0);
+}
+
 function updateParticles() {
   for (const p of particles) {
     p.x += p.vx;
@@ -1449,10 +1582,12 @@ function render() {
   drawCathedral(bgCam);
   drawPalms(bgCam);
   drawPlaza(bgCam);
+  if (state !== 'title') drawPlatforms(camera.x);
 
   // entidades solo en juego
   if (state !== 'title') {
     drawEntities();
+    drawProjectiles();
     drawParticles();
   }
 
@@ -1465,6 +1600,52 @@ function render() {
   else if (state === 'gameover') drawGameOver();
   else if (state === 'win') drawWin();
   else if (waveBanner > 0) drawWaveBanner();
+}
+
+function drawPlatforms(camX) {
+  for (const p of platforms) {
+    const x = p.x - camX;
+    if (x + p.w < 0 || x > W) continue;
+    // losa superior
+    px(x, p.y, p.w, 4, C.cathedralCream);
+    px(x, p.y + 4, p.w, 2, C.cathedralShade);
+    px(x, p.y + 6, p.w, 1, C.cathedralPinkDark);
+    // ménsulas/soportes
+    px(x + 4,        p.y + 7, 3, 10, C.cathedralPinkDark);
+    px(x + p.w - 7,  p.y + 7, 3, 10, C.cathedralPinkDark);
+    // barandilla puntos
+    for (let i = 6; i < p.w - 6; i += 8) {
+      px(x + i, p.y - 4, 2, 4, C.cathedralPinkDark);
+    }
+  }
+}
+
+function drawProjectiles() {
+  for (const pr of projectiles) {
+    const sx = (pr.x - camera.x) | 0;
+    const sy = pr.y | 0;
+    if (pr.kind === 'decree') {
+      // Decreto enrollado con banda tricolor
+      px(sx, sy + 1, 12, 7, C.cathedralCream);
+      px(sx, sy + 3, 12, 1, C.sashGreen);
+      px(sx, sy + 4, 12, 1, C.sashWhite);
+      px(sx, sy + 5, 12, 1, C.sashRed);
+      px(sx, sy + 1, 12, 1, C.cathedralShade);
+      px(sx, sy + 7, 12, 1, C.cathedralPinkDark);
+      // estela
+      const trail = pr.vx > 0 ? -6 : 14;
+      px(sx + trail, sy + 3, 4, 1, C.cathedralCream);
+      px(sx + trail, sy + 5, 4, 1, C.cathedralCream);
+    } else if (pr.kind === 'book') {
+      // Libro rojo con filo dorado
+      px(sx, sy, 12, 10, C.embRed);
+      px(sx, sy, 12, 2, C.medalGold);
+      px(sx, sy + 8, 12, 2, C.medalGold);
+      px(sx + 5, sy + 3, 2, 4, C.guayabera);
+      const trail = pr.vx > 0 ? -5 : 13;
+      px(sx + trail, sy + 4, 4, 1, C.embRed);
+    }
+  }
 }
 
 function drawEntities() {
@@ -1632,7 +1813,7 @@ function drawTitle() {
   ctx.fillText('EL PRESIDENTE', W / 2 - 120, 140);
   ctx.fillStyle = C.embRed;
   ctx.fillText('VS', W / 2 - 35, 140);
-  ctx.fillText('LOS 3 JEFES', W / 2 + 70, 140);
+  ctx.fillText('JEFES DE MORENA', W / 2 + 70, 140);
 
   drawSprite(heroSprites.idle, W / 2 - 138, 150, heroPal, PX, false);
   drawSprite(zombieSprites.walk1, W / 2 - 95, 150, zombiePal, PX, false);
@@ -1649,7 +1830,7 @@ function drawTitle() {
 
   ctx.font = '8px "Press Start 2P", monospace';
   ctx.fillStyle = '#888';
-  ctx.fillText('FLECHAS: MOVER   Z: SALTAR   X: GOLPE', W / 2, 320);
+  ctx.fillText('FLECHAS:MOVER  Z:SALTAR  X:GOLPE  C:DECRETO', W / 2, 320);
   ctx.fillText('(C) 1993 MEXI-PIX', W / 2, 350);
 
   ctx.textAlign = 'left';
@@ -1671,7 +1852,7 @@ function drawWaveBanner() {
   ctx.fillText(boss ? 'OLEADA FINAL' : 'OLEADA ' + wave, W / 2, 165);
   ctx.font = '10px "Press Start 2P", monospace';
   ctx.fillStyle = C.white;
-  ctx.fillText(boss ? 'LOS JEFES HAN LLEGADO' : 'LOS MOREZOMBIS ATACAN', W / 2, 195);
+  ctx.fillText(boss ? 'LLEGAN LOS JEFES DE MORENA' : 'LOS MOREZOMBIS ATACAN', W / 2, 195);
   ctx.textAlign = 'left';
 }
 
@@ -1705,7 +1886,7 @@ function drawWin() {
   ctx.font = '10px "Press Start 2P", monospace';
   ctx.fillStyle = C.white;
   ctx.fillText('EL PRESIDENTE SALVO LA CATEDRAL', W / 2, 130);
-  ctx.fillText('LOS MOREZOMBIS Y LOS JEFES', W / 2, 155);
+  ctx.fillText('MOREZOMBIS Y JEFES DE MORENA', W / 2, 155);
   ctx.fillText('FUERON DERROTADOS', W / 2, 175);
   ctx.fillStyle = C.hudG;
   ctx.fillText('SCORE FINAL: ' + String(player.score).padStart(6, '0'), W / 2, 215);
