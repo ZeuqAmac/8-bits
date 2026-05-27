@@ -111,6 +111,11 @@ function pressKey(k) {
 }
 function releaseKey(k) { keys[k.toLowerCase()] = false; }
 
+// Activar UI tactil solo en dispositivos con touch real
+const isTouch = (navigator.maxTouchPoints > 0)
+  || window.matchMedia('(hover: none) and (pointer: coarse)').matches;
+document.body.classList.toggle('is-touch', isTouch);
+
 document.querySelectorAll('.t-btn').forEach(btn => {
   const k = btn.dataset.key;
   const down = e => { e.preventDefault(); pressKey(k); };
@@ -1849,19 +1854,22 @@ function drawTitle() {
   ctx.fillStyle = C.white;
   ctx.fillText('LA CATEDRAL MALDITA', W / 2, 120);
 
-  // Presidente vs morezombi + jefes
+  // Heroes (izq) vs morezombi + jefes (der)
   ctx.font = '8px "Press Start 2P", monospace';
   ctx.fillStyle = C.hudG;
-  ctx.fillText('EL PRESIDENTE', W / 2 - 120, 140);
+  ctx.fillText('EL PRESIDENTE', W / 2 - 130, 140);
   ctx.fillStyle = C.embRed;
-  ctx.fillText('VS', W / 2 - 35, 140);
-  ctx.fillText('JEFES DE MORENA', W / 2 + 70, 140);
+  ctx.fillText('VS', W / 2 - 15, 140);
+  ctx.fillText('MOREZOMBIS + MORENA', W / 2 + 95, 140);
 
-  drawSprite(heroSprites.idle, W / 2 - 138, 150, heroPal, PX, false);
-  drawSprite(zombieSprites.walk1, W / 2 - 95, 150, zombiePal, PX, false);
-  drawSprite(boss1Sprites.walk1, W / 2 + 5, 150, boss1Pal, PX, true);
-  drawSprite(boss2Sprites.walk1, W / 2 + 50, 150, boss2Pal, PX, true);
-  drawSprite(boss3Sprites.walk1, W / 2 + 95, 150, boss3Pal, PX, true);
+  // Izquierda: solo el presidente, mirando a los enemigos
+  drawSprite(heroSprites.idle, W / 2 - 140, 150, heroPal, PX, false);
+
+  // Derecha: morezombi junto a los 3 jefes, todos mirando al presidente
+  drawSprite(zombieSprites.walk1, W / 2 + 18, 150, zombiePal, PX, true);
+  drawSprite(boss1Sprites.walk1, W / 2 + 55, 150, boss1Pal, PX, true);
+  drawSprite(boss2Sprites.walk1, W / 2 + 95, 150, boss2Pal, PX, true);
+  drawSprite(boss3Sprites.walk1, W / 2 + 135, 150, boss3Pal, PX, true);
 
   // === Menu de modo ===
   ctx.font = '11px "Press Start 2P", monospace';
