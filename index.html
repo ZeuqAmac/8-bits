@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a1a2e">
+<title>8-BITS · Aventura</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; overflow: hidden;
+    background: #0d0d1a;
+    font-family: "Courier New", monospace;
+    user-select: none; -webkit-user-select: none;
+    touch-action: none; overscroll-behavior: none;
+  }
+  #game {
+    position: fixed; inset: 0;
+    width: 100%; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+  }
+  canvas {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    background: #5c94fc;
+    display: block;
+    touch-action: none;
+  }
+  /* ---- Controles tipo gamepad ---- */
+  #controls {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .pad {
+    position: absolute; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+    pointer-events: auto;
+  }
+  #dpad {
+    left: calc(env(safe-area-inset-left, 0px) + 16px);
+    width: 150px; height: 150px;
+  }
+  #dpad .btn {
+    position: absolute;
+    width: 50px; height: 50px;
+    background: rgba(30,30,50,0.55);
+    border: 2px solid rgba(255,255,255,0.35);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 22px; font-weight: bold;
+  }
+  #dpad #left  { left: 0;   top: 50px; border-radius: 12px 0 0 12px; }
+  #dpad #right { left: 100px; top: 50px; border-radius: 0 12px 12px 0; }
+  #dpad #down  { left: 50px; top: 50px; }
+  #dpad .center { left: 50px; top: 50px; background: rgba(30,30,50,0.55); border: 2px solid rgba(255,255,255,0.15); }
+  .abtn {
+    right: calc(env(safe-area-inset-right, 0px) + 24px);
+    width: 92px; height: 92px; border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #ff7a7a, #d62246);
+    border: 3px solid rgba(255,255,255,0.55);
+    color: #fff; font-size: 30px; font-weight: bold;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.35);
+  }
+  #aBtn { bottom: calc(env(safe-area-inset-bottom, 0px) + 40px); }
+  .btn:active, .abtn:active { filter: brightness(1.4); transform: translateY(2px); }
+  /* ---- Overlays ---- */
+  .overlay {
+    position: fixed; inset: 0; z-index: 20;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; color: #fff;
+    background: rgba(5,5,20,0.82);
+    padding: 24px;
+  }
+  .overlay.hidden { display: none; }
+  .title {
+    font-size: clamp(32px, 12vw, 72px); font-weight: bold;
+    color: #ffd93d; text-shadow: 4px 4px 0 #d62246, 8px 8px 0 rgba(0,0,0,0.4);
+    letter-spacing: 4px; margin-bottom: 8px;
+  }
+  .subtitle { font-size: clamp(13px, 4vw, 18px); color: #9be7ff; margin-bottom: 28px; letter-spacing: 2px; }
+  .menu-btn {
+    pointer-events: auto;
+    font-family: inherit; font-size: clamp(16px, 5vw, 22px); font-weight: bold;
+    color: #fff; background: #d62246; border: 3px solid #fff;
+    padding: 14px 36px; margin: 8px; border-radius: 10px;
+    box-shadow: 0 5px 0 rgba(0,0,0,0.4); cursor: pointer;
+    letter-spacing: 2px;
+  }
+  .menu-btn:active { transform: translateY(3px); box-shadow: 0 2px 0 rgba(0,0,0,0.4); }
+  .menu-btn.alt { background: #2a9d8f; }
+  .hint { font-size: clamp(11px, 3.4vw, 14px); color: #c9c9e0; margin-top: 22px; line-height: 1.7; max-width: 340px; }
+  .big { font-size: clamp(26px, 9vw, 52px); color: #ffd93d; text-shadow: 3px 3px 0 #d62246; margin-bottom: 14px; }
+  .stat { font-size: clamp(14px, 4.5vw, 20px); color: #fff; margin: 4px 0; }
+  #sndToggle {
+    position: fixed; top: calc(env(safe-area-inset-top,0px) + 10px);
+    right: calc(env(safe-area-inset-right,0px) + 12px);
+    z-index: 15; pointer-events: auto;
+    width: 42px; height: 42px; border-radius: 8px;
+    background: rgba(30,30,50,0.6); border: 2px solid rgba(255,255,255,0.4);
+    color: #fff; font-size: 20px; display: flex; align-items: center; justify-content: center;
+  }
+</style>
+</head>
+<body>
+<div id="game"><canvas id="cv"></canvas></div>
+
+<!-- Controles estilo mando de consola -->
+<div id="controls" class="hidden" style="display:none">
+  <div id="dpad" class="pad">
+    <div class="btn" id="left">◀</div>
+    <div class="btn center" id="down">▼</div>
+    <div class="btn" id="right">▶</div>
+  </div>
+  <div id="aBtn" class="pad abtn">A</div>
+</div>
+<div id="sndToggle">🔊</div>
+
+<!-- Menú principal -->
+<div id="menu" class="overlay">
+  <div class="title">8·BITS</div>
+  <div class="subtitle">~ LA AVENTURA ~</div>
+  <button class="menu-btn" id="startBtn">JUGAR</button>
+  <div class="hint">
+    ◀ ▶ moverte &nbsp;·&nbsp; <b>A</b> saltar<br>
+    Recoge monedas, esquiva enemigos<br>
+    y alcanza la bandera 🚩 de cada nivel.
+  </div>
+</div>
+
+<!-- Transición de nivel -->
+<div id="levelCard" class="overlay hidden">
+  <div class="big" id="levelTitle">NIVEL 1</div>
+  <div class="subtitle" id="levelName"></div>
+  <button class="menu-btn alt" id="goBtn">¡ADELANTE!</button>
+</div>
+
+<!-- Fin de nivel / muerte -->
+<div id="resultCard" class="overlay hidden">
+  <div class="big" id="resultTitle">¡NIVEL COMPLETADO!</div>
+  <div class="stat" id="resultStats"></div>
+  <button class="menu-btn" id="nextBtn">CONTINUAR</button>
+</div>
+
+<script>
+"use strict";
+(function () {
+
+/* ============================================================
+   AUDIO — chiptune procedural (Web Audio API, sin archivos)
+   ============================================================ */
+const Audio = (function () {
+  let ctx = null, master = null, musicGain = null, sfxGain = null;
+  let enabled = true, musicTimer = null, started = false;
+
+  function init() {
+    if (ctx) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC();
+    master = ctx.createGain(); master.gain.value = 0.6; master.connect(ctx.destination);
+    musicGain = ctx.createGain(); musicGain.gain.value = 0.28; musicGain.connect(master);
+    sfxGain = ctx.createGain(); sfxGain.gain.value = 0.5; sfxGain.connect(master);
+  }
+  function resume() { if (ctx && ctx.state === "suspended") ctx.resume(); }
+
+  // Una nota simple con envolvente
+  function blip(freq, dur, type, gain, dest) {
+    if (!ctx) return;
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = type || "square"; o.frequency.value = freq;
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(gain || 0.3, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(dest || sfxGain);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+
+  const SFX = {
+    jump()  { if (enabled) { blip(330, 0.12, "square", 0.3); setTimeout(()=>blip(560,0.1,"square",0.25),40); } },
+    coin()  { if (enabled) { blip(880,0.07,"square",0.3); setTimeout(()=>blip(1320,0.12,"square",0.28),70); } },
+    stomp() { if (enabled) { blip(180,0.12,"square",0.3); setTimeout(()=>blip(120,0.14,"square",0.25),60); } },
+    hurt()  { if (enabled) { blip(200,0.18,"sawtooth",0.32); setTimeout(()=>blip(120,0.22,"sawtooth",0.3),90); } },
+    win()   { if (enabled) { [523,659,784,1047].forEach((f,i)=>setTimeout(()=>blip(f,0.18,"square",0.3),i*120)); } },
+    select(){ if (enabled) blip(660,0.08,"square",0.25); }
+  };
+
+  // --- Música de fondo: loop alegre estilo plataformas ---
+  // Melodía (Hz) y bajo, en negras/corcheas.
+  const MELODY = [
+    659,0,659,0, 523,659,0,784, 0,0,392,0,
+    523,0,0,392, 0,330,0,0, 440,0,494,0,
+    466,0,440,0, 392,659,784,880, 0,698,784,0,
+    659,0,523,587, 494,0,0,0
+  ];
+  const BASS = [
+    131,131,165,165, 196,196,131,131,
+    175,175,131,131, 110,110,147,147,
+    131,131,165,165, 196,196,247,247,
+    131,131,98,98,  131,131,131,131
+  ];
+  let step = 0;
+  const STEP_MS = 175; // tempo
+
+  function playStep() {
+    if (!enabled) return;
+    const m = MELODY[step % MELODY.length];
+    if (m > 0) blip(m, 0.16, "square", 0.22, musicGain);
+    const b = BASS[step % BASS.length];
+    if (b > 0) blip(b, 0.20, "triangle", 0.3, musicGain);
+    // percusión ligera en off-beats
+    if (step % 4 === 2) blip(2000, 0.03, "square", 0.05, musicGain);
+    step++;
+  }
+  function startMusic() {
+    if (musicTimer || !ctx) return;
+    musicTimer = setInterval(playStep, STEP_MS);
+  }
+  function stopMusic() { if (musicTimer) { clearInterval(musicTimer); musicTimer = null; } }
+
+  return {
+    start() { init(); resume(); started = true; },
+    resume,
+    sfx: SFX,
+    startMusic, stopMusic,
+    setEnabled(v) {
+      enabled = v;
+      if (master) master.gain.value = v ? 0.6 : 0;
+    },
+    isEnabled() { return enabled; },
+    isReady() { return started; }
+  };
+})();
+
+/* ============================================================
+   NIVELES — mapas de tiles tipo plataformero 90's
+   Leyenda:  X tierra/ladrillo   = plataforma   o moneda
+             ^ pinchos           E enemigo      F bandera (meta)
+             P inicio del jugador (.) vacío
+   ============================================================ */
+const TILE = 32;
+const LEVELS = [
+  {
+    name: "PRADERA VERDE",
+    sky: "#5c94fc", ground: "#3aa83a", dirt: "#7a4a1e",
+    map: [
+      "................................................",
+      "................................................",
+      "..........o.o...................................",
+      ".........XX=XX..............o.o..................",
+      ".....................o..........................",
+      "...............o....=====.....====..............",
+      "..........o.....................................",
+      "....P........====.........o........o.....F......",
+      "......o..o..............E.......E........=......",
+      "...====................=========.......===......",
+      "XXXXXXXXXX^^XXXXXXXXXXXXXXXXXX^^XXXXXXXXXXXXXXXXX",
+      "XXXXXXXXXX^^XXXXXXXXXXXXXXXXXX^^XXXXXXXXXXXXXXXXX",
+    ]
+  },
+  {
+    name: "CUEVAS DE CRISTAL",
+    sky: "#2a1a4a", ground: "#6a5acd", dirt: "#3a2a6a",
+    map: [
+      "................................................",
+      "....o.o.................o.o.o....................",
+      "...XX=XX...............======....................",
+      "..................o.............................",
+      ".........====....======......o..........o.......",
+      "...o.o..................E............===========",
+      "..======....o.o....E.......====.....F...........",
+      "P..........======............o..................",
+      "...E.................^^^.........................",
+      "=====....====...===.....===...====..............",
+      "XXX^^XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX^^^XXXXXXX",
+      "XXX^^XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX^^^XXXXXXX",
+    ]
+  },
+  {
+    name: "CASTILLO FINAL",
+    sky: "#1a0a1a", ground: "#b0413e", dirt: "#5a1a1a",
+    map: [
+      "................................................",
+      ".o.o.o....................o.o.o.o................",
+      "=======......E.....E.....=========..............",
+      "...............===..............................",
+      "......o.o................o..o...........o.o.o....",
+      ".....======....^^^^....======.........========..",
+      "...........................E.........E.....F....",
+      "P...E....====......====.........====...====.....",
+      "..======......E.......^^^^^......o..............",
+      "..........====....====.....====.....====........",
+      "XXX^^XXXX^^XXXXXX^^^XXXXXX^^^XXXXX^^XXXXXXX^^XXXXX",
+      "XXX^^XXXX^^XXXXXX^^^XXXXXX^^^XXXXX^^XXXXXXX^^XXXXX",
+    ]
+  }
+];
+
+/* ============================================================
+   CANVAS / ESCALADO A SMARTPHONE
+   ============================================================ */
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+// Resolución virtual del juego (vista de cámara). Se escala a pantalla.
+const VIEW_W = 480, VIEW_H = 270; // 16:9
+function resize() {
+  const ww = window.innerWidth, wh = window.innerHeight;
+  const scale = Math.min(ww / VIEW_W, wh / VIEW_H);
+  cv.width = VIEW_W; cv.height = VIEW_H;
+  cv.style.width = Math.floor(VIEW_W * scale) + "px";
+  cv.style.height = Math.floor(VIEW_H * scale) + "px";
+}
+window.addEventListener("resize", resize);
+window.addEventListener("orientationchange", () => setTimeout(resize, 100));
+resize();
+
+/* ============================================================
+   ESTADO DEL JUEGO
+   ============================================================ */
+const STATE = { MENU: 0, CARD: 1, PLAY: 2, RESULT: 3 };
+let gameState = STATE.MENU;
+let levelIndex = 0;
+let totalCoins = 0;
+
+const input = { left: false, right: false, jump: false, jumpPressed: false };
+
+const player = {
+  x: 0, y: 0, w: 22, h: 28, vx: 0, vy: 0,
+  onGround: false, facing: 1, anim: 0,
+  alive: true, coins: 0, lives: 3, invuln: 0
+};
+
+let level = null;        // mapa parseado
+let tiles = [];          // matriz de chars
+let coinList = [], enemyList = [], spikes = [], flag = null;
+let levelW = 0, levelH = 0;
+let camX = 0, camY = 0;
+let startCoins = 0;
+
+const GRAVITY = 0.55, MOVE = 0.7, MAX_VX = 3.4, FRICTION = 0.8, JUMP_V = -10.2;
+
+function parseLevel(def) {
+  tiles = def.map.map(r => r.split(""));
+  levelH = tiles.length; levelW = tiles[0].length;
+  coinList = []; enemyList = []; spikes = []; flag = null;
+  for (let r = 0; r < levelH; r++) {
+    for (let c = 0; c < levelW; c++) {
+      const ch = tiles[r][c];
+      const px = c * TILE, py = r * TILE;
+      if (ch === "P") { player.x = px + 4; player.y = py; tiles[r][c] = "."; }
+      else if (ch === "o") { coinList.push({ x: px + 8, y: py + 8, got: false, t: Math.random()*6 }); tiles[r][c] = "."; }
+      else if (ch === "E") { enemyList.push({ x: px + 2, y: py + 4, w: 26, h: 26, vx: -0.9, alive: true, t: 0, minx: px-80, maxx: px+80 }); tiles[r][c] = "."; }
+      else if (ch === "F") { flag = { x: px + 8, y: py - TILE, w: 16, h: TILE*2 }; tiles[r][c] = "."; }
+    }
+  }
+  level = def;
+  player.vx = 0; player.vy = 0; player.alive = true; player.onGround = false;
+  player.coins = 0; player.invuln = 0; startCoins = totalCoins;
+  camX = 0; camY = 0;
+}
+
+// ¿Es sólido el tile en coordenadas de columna/fila?
+function solidAt(c, r) {
+  if (r < 0 || r >= levelH || c < 0 || c >= levelW) return c < 0 || c >= levelW; // paredes laterales
+  const ch = tiles[r][c];
+  return ch === "X" || ch === "=";
+}
+function spikeAt(c, r) {
+  if (r < 0 || r >= levelH || c < 0 || c >= levelW) return false;
+  return tiles[r][c] === "^";
+}
+
+/* ============================================================
+   FÍSICA / COLISIONES
+   ============================================================ */
+function rectVsTiles(o, axis) {
+  const left = Math.floor(o.x / TILE), right = Math.floor((o.x + o.w - 1) / TILE);
+  const top = Math.floor(o.y / TILE), bottom = Math.floor((o.y + o.h - 1) / TILE);
+  for (let r = top; r <= bottom; r++) {
+    for (let c = left; c <= right; c++) {
+      if (solidAt(c, r)) {
+        if (axis === "x") {
+          if (o.vx > 0) o.x = c * TILE - o.w;
+          else if (o.vx < 0) o.x = (c + 1) * TILE;
+          o.vx = 0;
+        } else {
+          if (o.vy > 0) { o.y = r * TILE - o.h; o.onGround = true; }
+          else if (o.vy < 0) o.y = (r + 1) * TILE;
+          o.vy = 0;
+        }
+        return;
+      }
+    }
+  }
+}
+
+function touchingSpikes(o) {
+  const left = Math.floor((o.x+2) / TILE), right = Math.floor((o.x + o.w - 3) / TILE);
+  const top = Math.floor(o.y / TILE), bottom = Math.floor((o.y + o.h - 1) / TILE);
+  for (let r = top; r <= bottom; r++)
+    for (let c = left; c <= right; c++)
+      if (spikeAt(c, r)) return true;
+  return false;
+}
+
+function overlap(a, b) {
+  return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
+}
+
+function killPlayer() {
+  if (player.invuln > 0 || !player.alive) return;
+  player.alive = false;
+  player.lives--;
+  Audio.sfx.hurt();
+  setTimeout(() => endLevel(false), 900);
+}
+
+function updatePlayer() {
+  if (!player.alive) { player.vy += GRAVITY; player.y += player.vy; return; }
+
+  // Movimiento horizontal
+  if (input.left)  { player.vx -= MOVE; player.facing = -1; }
+  if (input.right) { player.vx += MOVE; player.facing = 1; }
+  if (!input.left && !input.right) player.vx *= FRICTION;
+  player.vx = Math.max(-MAX_VX, Math.min(MAX_VX, player.vx));
+  if (Math.abs(player.vx) < 0.05) player.vx = 0;
+
+  player.x += player.vx; rectVsTiles(player, "x");
+
+  // Salto
+  if (input.jumpPressed && player.onGround) {
+    player.vy = JUMP_V; player.onGround = false; Audio.sfx.jump();
+  }
+  input.jumpPressed = false;
+  // salto variable: soltar A corta el salto
+  if (!input.jump && player.vy < -4) player.vy = -4;
+
+  player.vy += GRAVITY;
+  if (player.vy > 14) player.vy = 14;
+  player.onGround = false;
+  player.y += player.vy; rectVsTiles(player, "y");
+
+  if (player.invuln > 0) player.invuln--;
+  player.anim += Math.abs(player.vx) * 0.2;
+
+  // Caída al vacío
+  if (player.y > levelH * TILE + 40) killPlayer();
+  // Pinchos
+  if (touchingSpikes(player)) killPlayer();
+
+  // Monedas
+  for (const cn of coinList) {
+    if (!cn.got && overlap(player, { x: cn.x, y: cn.y, w: 16, h: 16 })) {
+      cn.got = true; player.coins++; totalCoins++; Audio.sfx.coin();
+    }
+  }
+
+  // Enemigos
+  for (const e of enemyList) {
+    if (!e.alive) continue;
+    if (overlap(player, e)) {
+      // pisar desde arriba
+      if (player.vy > 1 && player.y + player.h - player.vy <= e.y + 8) {
+        e.alive = false; player.vy = JUMP_V * 0.6; Audio.sfx.stomp();
+      } else {
+        killPlayer();
+      }
+    }
+  }
+
+  // Bandera = meta
+  if (flag && overlap(player, flag)) {
+    endLevel(true);
+  }
+}
+
+function updateEnemies() {
+  for (const e of enemyList) {
+    if (!e.alive) continue;
+    e.t += 0.1;
+    e.x += e.vx;
+    // rebote en límites de patrulla o paredes
+    const c = Math.floor((e.vx < 0 ? e.x : e.x + e.w) / TILE);
+    const rFoot = Math.floor((e.y + e.h + 2) / TILE);
+    const rMid = Math.floor((e.y + e.h/2) / TILE);
+    if (e.x < e.minx || e.x > e.maxx || solidAt(c, rMid) || !solidAt(Math.floor((e.x+e.w/2)/TILE), rFoot)) {
+      e.vx *= -1;
+      e.x = Math.max(e.minx, Math.min(e.maxx, e.x));
+    }
+  }
+}
+
+function updateCamera() {
+  const targetX = player.x + player.w/2 - VIEW_W/2;
+  camX += (targetX - camX) * 0.12;
+  camX = Math.max(0, Math.min(levelW * TILE - VIEW_W, camX));
+  const targetY = player.y + player.h/2 - VIEW_H/2;
+  camY += (targetY - camY) * 0.1;
+  camY = Math.max(0, Math.min(Math.max(0, levelH * TILE - VIEW_H), camY));
+}
+
+/* ============================================================
+   DIBUJO
+   ============================================================ */
+function drawBackground() {
+  ctx.fillStyle = level.sky;
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+  // colinas / parallax simple
+  ctx.fillStyle = "rgba(255,255,255,0.10)";
+  const off = (camX * 0.3) % 160;
+  for (let i = -1; i < VIEW_W/160 + 2; i++) {
+    const cx = i*160 - off + 60;
+    ctx.beginPath();
+    ctx.arc(cx, VIEW_H - 30, 70, Math.PI, 0);
+    ctx.fill();
+  }
+  // nubes
+  ctx.fillStyle = "rgba(255,255,255,0.5)";
+  const coff = (camX * 0.15) % 220;
+  for (let i = -1; i < VIEW_W/220 + 2; i++) {
+    const cx = i*220 - coff + 40, cy = 40 + (i%2)*30;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 12, 0, 7); ctx.arc(cx+14, cy, 16, 0, 7); ctx.arc(cx+32, cy, 12, 0, 7);
+    ctx.fill();
+  }
+}
+
+function drawTiles() {
+  const c0 = Math.floor(camX / TILE), c1 = Math.ceil((camX + VIEW_W) / TILE);
+  const r0 = Math.floor(camY / TILE), r1 = Math.ceil((camY + VIEW_H) / TILE);
+  for (let r = r0; r <= r1; r++) {
+    for (let c = c0; c <= c1; c++) {
+      if (r < 0 || r >= levelH || c < 0 || c >= levelW) continue;
+      const ch = tiles[r][c];
+      const x = Math.floor(c * TILE - camX), y = Math.floor(r * TILE - camY);
+      if (ch === "X") {
+        ctx.fillStyle = level.dirt; ctx.fillRect(x, y, TILE, TILE);
+        ctx.fillStyle = level.ground; ctx.fillRect(x, y, TILE, 8);
+        ctx.fillStyle = "rgba(0,0,0,0.18)"; ctx.fillRect(x, y+TILE-4, TILE, 4);
+        ctx.fillStyle = "rgba(255,255,255,0.08)"; ctx.fillRect(x+2, y+10, 4, 4); ctx.fillRect(x+18, y+18, 4, 4);
+      } else if (ch === "=") {
+        ctx.fillStyle = "#c47a3a"; ctx.fillRect(x, y, TILE, TILE);
+        ctx.fillStyle = "#e0a060"; ctx.fillRect(x, y, TILE, 6);
+        ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = 1;
+        ctx.strokeRect(x+0.5, y+0.5, TILE-1, TILE-1);
+        ctx.beginPath(); ctx.moveTo(x, y+16); ctx.lineTo(x+TILE, y+16); ctx.stroke();
+      } else if (ch === "^") {
+        ctx.fillStyle = "#cfd8e8";
+        ctx.beginPath();
+        ctx.moveTo(x, y+TILE); ctx.lineTo(x+TILE/2, y+6); ctx.lineTo(x+TILE, y+TILE);
+        ctx.closePath(); ctx.fill();
+        ctx.strokeStyle = "#8a97ad"; ctx.stroke();
+      }
+    }
+  }
+}
+
+function drawCoin(cn) {
+  if (cn.got) return;
+  cn.t += 0.12;
+  const x = cn.x - camX, y = cn.y - camY + Math.sin(cn.t)*2;
+  const w = 12 * Math.abs(Math.cos(cn.t*0.8)) + 2;
+  ctx.fillStyle = "#ffd93d";
+  ctx.beginPath(); ctx.ellipse(x+8, y+8, w/2, 8, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#ffec99"; ctx.fillRect(x+7, y+4, 2, 8);
+}
+
+function drawFlag() {
+  if (!flag) return;
+  const x = flag.x - camX, y = flag.y - camY;
+  ctx.fillStyle = "#ddd"; ctx.fillRect(x+6, y, 3, flag.h);
+  ctx.fillStyle = "#2a9d8f"; ctx.fillRect(x-2, y, 4, 4); // tope
+  const wave = Math.sin(Date.now()/180)*3;
+  ctx.fillStyle = "#d62246";
+  ctx.beginPath();
+  ctx.moveTo(x+9, y+4); ctx.lineTo(x+30+wave, y+10); ctx.lineTo(x+9, y+18);
+  ctx.closePath(); ctx.fill();
+}
+
+function drawEnemy(e) {
+  if (!e.alive) return;
+  const x = Math.floor(e.x - camX), y = Math.floor(e.y - camY);
+  const bob = Math.sin(e.t*2)*1.5;
+  ctx.fillStyle = "#9b2226";
+  ctx.fillRect(x+2, y+6+bob, e.w-4, e.h-6);
+  ctx.fillStyle = "#bb3e03";
+  ctx.fillRect(x, y+e.h-6, 6, 6); ctx.fillRect(x+e.w-6, y+e.h-6, 6, 6); // pies
+  // ojos
+  ctx.fillStyle = "#fff";
+  const ed = e.vx < 0 ? -2 : 2;
+  ctx.fillRect(x+6+ed, y+10+bob, 5, 5); ctx.fillRect(x+e.w-11+ed, y+10+bob, 5, 5);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(x+8+ed, y+12+bob, 2, 2); ctx.fillRect(x+e.w-9+ed, y+12+bob, 2, 2);
+  // ceño
+  ctx.fillStyle = "#3a0a0a"; ctx.fillRect(x+5, y+8+bob, e.w-10, 2);
+}
+
+function drawPlayer() {
+  const x = Math.floor(player.x - camX), y = Math.floor(player.y - camY);
+  if (player.invuln > 0 && Math.floor(player.invuln/4) % 2 === 0) return;
+  ctx.save();
+  if (!player.alive) ctx.globalAlpha = 0.6;
+  const f = player.facing;
+  // piernas (animadas)
+  const legPhase = player.onGround ? Math.sin(player.anim) : 1;
+  ctx.fillStyle = "#1a3a8a";
+  ctx.fillRect(x+3, y+20, 6, 8 + (legPhase>0?2:0));
+  ctx.fillRect(x+13, y+20, 6, 8 + (legPhase<0?2:0));
+  // cuerpo
+  ctx.fillStyle = "#e03e3e"; ctx.fillRect(x+2, y+10, 18, 12);
+  ctx.fillStyle = "#ff6b6b"; ctx.fillRect(x+2, y+10, 18, 3);
+  // cabeza
+  ctx.fillStyle = "#ffcc99"; ctx.fillRect(x+4, y, 14, 11);
+  // gorra
+  ctx.fillStyle = "#e03e3e"; ctx.fillRect(x+3, y-2, 16, 5);
+  ctx.fillStyle = "#c52e2e"; ctx.fillRect(f>0?x+14:x+1, y+1, 6, 3); // visera
+  // ojo
+  ctx.fillStyle = "#1a1a3a";
+  ctx.fillRect(f>0 ? x+12 : x+6, y+4, 3, 4);
+  ctx.restore();
+}
+
+function drawHUD() {
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.fillRect(0, 0, VIEW_W, 22);
+  ctx.fillStyle = "#ffd93d"; ctx.font = "bold 14px 'Courier New', monospace";
+  ctx.textBaseline = "middle";
+  // moneda icono
+  ctx.beginPath(); ctx.ellipse(16, 11, 5, 7, 0, 0, 7); ctx.fill();
+  ctx.fillStyle = "#fff";
+  ctx.fillText("× " + player.coins, 26, 12);
+  // vidas
+  ctx.fillStyle = "#ff6b6b"; ctx.fillText("♥".repeat(Math.max(0,player.lives)), 120, 12);
+  // nivel
+  ctx.fillStyle = "#9be7ff"; ctx.textAlign = "right";
+  ctx.fillText("NIVEL " + (levelIndex+1) + "/" + LEVELS.length, VIEW_W-8, 12);
+  ctx.textAlign = "left";
+}
+
+function render() {
+  drawBackground();
+  drawTiles();
+  for (const cn of coinList) drawCoin(cn);
+  drawFlag();
+  for (const e of enemyList) drawEnemy(e);
+  drawPlayer();
+  drawHUD();
+}
+
+/* ============================================================
+   BUCLE PRINCIPAL (timestep fijo)
+   ============================================================ */
+let lastT = 0, acc = 0; const STEP = 1000/60;
+function loop(t) {
+  requestAnimationFrame(loop);
+  if (gameState !== STATE.PLAY) { lastT = t; return; }
+  let dt = t - lastT; lastT = t;
+  if (dt > 100) dt = 100;
+  acc += dt;
+  while (acc >= STEP) {
+    updatePlayer();
+    updateEnemies();
+    updateCamera();
+    acc -= STEP;
+  }
+  render();
+}
+requestAnimationFrame(loop);
+
+/* ============================================================
+   FLUJO DE PANTALLAS
+   ============================================================ */
+const elMenu = document.getElementById("menu");
+const elCard = document.getElementById("levelCard");
+const elResult = document.getElementById("resultCard");
+const elControls = document.getElementById("controls");
+
+function show(el) { el.classList.remove("hidden"); el.style.display = "flex"; }
+function hide(el) { el.classList.add("hidden"); el.style.display = "none"; }
+
+function showControls(v) {
+  if (v) { elControls.style.display = "block"; elControls.classList.remove("hidden"); }
+  else { elControls.style.display = "none"; elControls.classList.add("hidden"); }
+}
+
+function startGame() {
+  Audio.start();
+  Audio.startMusic();
+  levelIndex = 0; totalCoins = 0; player.lives = 3;
+  hide(elMenu);
+  showLevelCard();
+}
+
+function showLevelCard() {
+  gameState = STATE.CARD;
+  showControls(false);
+  document.getElementById("levelTitle").textContent = "NIVEL " + (levelIndex+1);
+  document.getElementById("levelName").textContent = "~ " + LEVELS[levelIndex].name + " ~";
+  show(elCard);
+}
+
+function beginLevel() {
+  hide(elCard); hide(elResult);
+  parseLevel(LEVELS[levelIndex]);
+  gameState = STATE.PLAY;
+  showControls(true);
+  Audio.startMusic();
+  lastT = performance.now(); acc = 0;
+}
+
+let levelWon = false;
+function endLevel(won) {
+  if (gameState !== STATE.PLAY) return;
+  levelWon = won;
+  gameState = STATE.RESULT;
+  showControls(false);
+  input.left = input.right = input.jump = false;
+  const rt = document.getElementById("resultTitle");
+  const rs = document.getElementById("resultStats");
+  const nb = document.getElementById("nextBtn");
+  if (won) {
+    Audio.sfx.win();
+    const isLast = levelIndex === LEVELS.length - 1;
+    rt.textContent = isLast ? "¡AVENTURA COMPLETA!" : "¡NIVEL SUPERADO!";
+    rt.style.color = "#ffd93d";
+    rs.innerHTML = "Monedas: " + player.coins + "<br>Vidas: " + player.lives;
+    nb.textContent = isLast ? "JUGAR DE NUEVO" : "SIGUIENTE NIVEL";
+  } else {
+    rt.textContent = player.lives > 0 ? "¡UPS! TE HAS CAÍDO" : "GAME OVER";
+    rt.style.color = "#ff6b6b";
+    rs.innerHTML = player.lives > 0 ? ("Vidas restantes: " + player.lives) : "Inténtalo de nuevo";
+    nb.textContent = player.lives > 0 ? "REINTENTAR" : "MENÚ PRINCIPAL";
+  }
+  show(elResult);
+}
+
+document.getElementById("startBtn").addEventListener("click", () => { Audio.sfx.select(); startGame(); });
+document.getElementById("goBtn").addEventListener("click", () => { Audio.sfx.select(); beginLevel(); });
+document.getElementById("nextBtn").addEventListener("click", () => {
+  Audio.sfx.select();
+  if (levelWon) {
+    if (levelIndex === LEVELS.length - 1) {
+      // reiniciar campaña
+      levelIndex = 0; totalCoins = 0; player.lives = 3;
+      hide(elResult); show(elMenu); gameState = STATE.MENU;
+    } else {
+      levelIndex++; hide(elResult); showLevelCard();
+    }
+  } else {
+    if (player.lives > 0) { hide(elResult); beginLevel(); }
+    else {
+      player.lives = 3; levelIndex = 0; totalCoins = 0;
+      hide(elResult); show(elMenu); gameState = STATE.MENU;
+    }
+  }
+});
+
+/* ============================================================
+   ENTRADA — botones táctiles tipo mando + teclado
+   ============================================================ */
+function bindBtn(id, onDown, onUp) {
+  const el = document.getElementById(id);
+  const down = (e) => { e.preventDefault(); Audio.resume(); onDown(); };
+  const up = (e) => { e.preventDefault(); onUp && onUp(); };
+  el.addEventListener("touchstart", down, { passive: false });
+  el.addEventListener("touchend", up, { passive: false });
+  el.addEventListener("touchcancel", up, { passive: false });
+  el.addEventListener("mousedown", down);
+  el.addEventListener("mouseup", up);
+  el.addEventListener("mouseleave", up);
+}
+bindBtn("left",  () => input.left = true,  () => input.left = false);
+bindBtn("right", () => input.right = true, () => input.right = false);
+bindBtn("aBtn",  () => { input.jump = true; input.jumpPressed = true; }, () => input.jump = false);
+
+// Teclado (para probar en escritorio)
+const keymap = { ArrowLeft:"left", a:"left", ArrowRight:"right", d:"right",
+                 ArrowUp:"jump", w:"jump", " ":"jump", z:"jump" };
+window.addEventListener("keydown", (e) => {
+  const k = keymap[e.key]; if (!k) return;
+  e.preventDefault();
+  if (k === "jump" && !input.jump) input.jumpPressed = true;
+  input[k] = true;
+  if (gameState === STATE.PLAY) Audio.resume();
+});
+window.addEventListener("keyup", (e) => { const k = keymap[e.key]; if (k) input[k] = false; });
+
+// Botón de sonido
+const sndBtn = document.getElementById("sndToggle");
+sndBtn.addEventListener("click", () => {
+  const on = !Audio.isEnabled();
+  Audio.setEnabled(on);
+  sndBtn.textContent = on ? "🔊" : "🔇";
+  if (on) Audio.resume();
+});
+
+// Evitar scroll/zoom en móvil
+document.addEventListener("touchmove", (e) => e.preventDefault(), { passive: false });
+document.addEventListener("gesturestart", (e) => e.preventDefault());
+window.addEventListener("contextmenu", (e) => e.preventDefault());
+
+// Inicializa audio al primer toque en cualquier parte
+function firstTouch() { Audio.start(); window.removeEventListener("touchstart", firstTouch); window.removeEventListener("mousedown", firstTouch); }
+window.addEventListener("touchstart", firstTouch);
+window.addEventListener("mousedown", firstTouch);
+
+})();
+</script>
+</body>
+</html>
