@@ -61,12 +61,12 @@ const levels = [
       [1080, 820]
     ],
     platforms: [
-      { x: 230, y: GROUND_Y - 80, w: 70 },
-      { x: 470, y: GROUND_Y - 90, w: 80 },
-      { x: 720, y: GROUND_Y - 100, w: 80 },
-      { x: 980, y: GROUND_Y - 90, w: 70 },
-      { x: 1300, y: GROUND_Y - 100, w: 70 },
-      { x: 1560, y: GROUND_Y - 75, w: 80 }
+      { x: 230, y: GROUND_Y - 70, w: 70 },
+      { x: 470, y: GROUND_Y - 80, w: 80 },
+      { x: 720, y: GROUND_Y - 85, w: 80 },
+      { x: 980, y: GROUND_Y - 80, w: 80 },
+      { x: 1300, y: GROUND_Y - 85, w: 70 },
+      { x: 1560, y: GROUND_Y - 70, w: 80 }
     ],
     enemies: [
       { type: 'zombie', x: 380 },
@@ -88,14 +88,14 @@ const levels = [
       [1440, 660]
     ],
     platforms: [
-      { x: 190, y: GROUND_Y - 80, w: 70 },
-      { x: 370, y: GROUND_Y - 100, w: 70 },
-      { x: 590, y: GROUND_Y - 100, w: 70 },
-      { x: 820, y: GROUND_Y - 110, w: 60 },
-      { x: 1050, y: GROUND_Y - 95, w: 70 },
-      { x: 1310, y: GROUND_Y - 95, w: 70 },
-      { x: 1560, y: GROUND_Y - 80, w: 80 },
-      { x: 1820, y: GROUND_Y - 100, w: 80 }
+      { x: 190, y: GROUND_Y - 70, w: 70 },
+      { x: 370, y: GROUND_Y - 95, w: 70 },
+      { x: 590, y: GROUND_Y - 90, w: 70 },
+      { x: 820, y: GROUND_Y - 95, w: 70 },
+      { x: 1050, y: GROUND_Y - 85, w: 70 },
+      { x: 1310, y: GROUND_Y - 85, w: 70 },
+      { x: 1560, y: GROUND_Y - 75, w: 80 },
+      { x: 1820, y: GROUND_Y - 90, w: 80 }
     ],
     enemies: [
       { type: 'zombie', x: 200 },
@@ -112,10 +112,10 @@ const levels = [
     width: 1400,
     ground: [[0, 1400]],
     platforms: [
-      { x: 200, y: GROUND_Y - 85, w: 80 },
-      { x: 470, y: GROUND_Y - 105, w: 80 },
-      { x: 770, y: GROUND_Y - 85, w: 80 },
-      { x: 1050, y: GROUND_Y - 105, w: 80 }
+      { x: 200, y: GROUND_Y - 80, w: 80 },
+      { x: 470, y: GROUND_Y - 95, w: 80 },
+      { x: 770, y: GROUND_Y - 80, w: 80 },
+      { x: 1050, y: GROUND_Y - 95, w: 80 }
     ],
     enemies: [],
     bosses: ['boss1', 'boss2', 'boss3'],
@@ -243,6 +243,61 @@ document.querySelectorAll('.t-btn').forEach(btn => {
   btn.addEventListener('mouseup', up);
   btn.addEventListener('mouseleave', up);
 });
+
+// ============================================================
+// GAMEPAD API - soporta GameSir X2, Xbox, PS y otros estándar
+// Mapeo:  D-pad/stick -> flechas  |  A -> saltar (Z)
+//         B -> golpe (X)          |  X/Y -> decreto (C)
+//         Start -> enter
+// ============================================================
+const padState = {};
+let padConnected = false;
+let padNotifyTimer = 0;
+let padName = '';
+function padPress(key, isDown) {
+  if (isDown && !padState[key]) pressKey(key);
+  else if (!isDown && padState[key]) releaseKey(key);
+  padState[key] = !!isDown;
+}
+window.addEventListener('gamepadconnected', (e) => {
+  padConnected = true;
+  padName = (e.gamepad.id || 'GAMEPAD').toUpperCase().slice(0, 24);
+  padNotifyTimer = 180;
+  ensureAudio();
+});
+window.addEventListener('gamepaddisconnected', () => {
+  padConnected = false;
+  for (const k in padState) padPress(k, false);
+});
+
+function pollGamepad() {
+  if (!navigator.getGamepads) return;
+  const pads = navigator.getGamepads();
+  let pad = null;
+  for (const p of pads) { if (p && p.connected) { pad = p; break; } }
+  if (!pad) return;
+  const ax = pad.axes[0] || 0;
+  const ay = pad.axes[1] || 0;
+  const left  = ax < -0.35 || (pad.buttons[14] && pad.buttons[14].pressed);
+  const right = ax >  0.35 || (pad.buttons[15] && pad.buttons[15].pressed);
+  const up    = ay < -0.35 || (pad.buttons[12] && pad.buttons[12].pressed);
+  const down  = ay >  0.35 || (pad.buttons[13] && pad.buttons[13].pressed);
+  const a = !!(pad.buttons[0] && pad.buttons[0].pressed);
+  const b = !!(pad.buttons[1] && pad.buttons[1].pressed);
+  const x = !!(pad.buttons[2] && pad.buttons[2].pressed);
+  const y = !!(pad.buttons[3] && pad.buttons[3].pressed);
+  const start = !!(pad.buttons[9] && pad.buttons[9].pressed);
+  const select = !!(pad.buttons[8] && pad.buttons[8].pressed);
+
+  padPress('arrowleft',  !!left);
+  padPress('arrowright', !!right);
+  padPress('arrowup',    !!up);
+  padPress('arrowdown',  !!down);
+  padPress('z', a || up);         // A o D-pad arriba = saltar
+  padPress('x', b);                // B = golpe
+  padPress('c', x || y);          // X o Y = decreto
+  padPress('enter', start || select);
+}
 
 // ---------- Audio (Web Audio beeps tipo 8-bit) ----------
 let actx = null;
@@ -1678,11 +1733,11 @@ function updatePlayer() {
   let moving = false;
   if (p.state !== 'hurt' && p.punchTimer === 0) {
     if (held('arrowleft', 'a')) {
-      p.vx = -2.2;
+      p.vx = -2.6;
       p.facing = -1;
       moving = true;
     } else if (held('arrowright', 'd')) {
-      p.vx = 2.2;
+      p.vx = 2.6;
       p.facing = 1;
       moving = true;
     } else {
@@ -1692,7 +1747,7 @@ function updatePlayer() {
 
     // saltar
     if (pressed('z', 'arrowup', 'w') && p.onGround) {
-      p.vy = -10;
+      p.vy = -12;
       p.onGround = false;
       sfx.jump();
     }
@@ -2293,7 +2348,8 @@ function drawTitle() {
 
   ctx.font = '7px "Press Start 2P", monospace';
   ctx.fillStyle = '#888';
-  ctx.fillText('Z SALTAR  X GOLPE  C DECRETO          1993 MEXI-PIX', W / 2, 350);
+  ctx.fillText('Z SALTAR  X GOLPE  C DECRETO   -   GAMEPAD OK', W / 2, 342);
+  ctx.fillText('1993 MEXI-PIX', W / 2, 354);
 
   ctx.textAlign = 'left';
 }
@@ -2402,9 +2458,33 @@ function drawWin() {
 // ============================================================
 
 function loop() {
+  pollGamepad();
   update();
   render();
+  if (padNotifyTimer > 0) {
+    padNotifyTimer--;
+    drawPadNotice();
+  }
   requestAnimationFrame(loop);
+}
+
+function drawPadNotice() {
+  ctx.save();
+  const a = Math.min(1, padNotifyTimer / 60);
+  ctx.fillStyle = `rgba(20, 40, 20, ${0.85 * a})`;
+  ctx.fillRect(W / 2 - 120, 40, 240, 28);
+  ctx.strokeStyle = `rgba(108, 240, 140, ${a})`;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(W / 2 - 120, 40, 240, 28);
+  ctx.fillStyle = `rgba(108, 240, 140, ${a})`;
+  ctx.font = '9px "Press Start 2P", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('GAMEPAD LISTO', W / 2, 56);
+  ctx.font = '6px "Press Start 2P", monospace';
+  ctx.fillStyle = `rgba(255, 255, 255, ${a * 0.8})`;
+  ctx.fillText(padName, W / 2, 64);
+  ctx.textAlign = 'left';
+  ctx.restore();
 }
 
 loop();
