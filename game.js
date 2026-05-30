@@ -13,16 +13,132 @@ const WORLD_W = 1600;
 const GRAVITY = 0.55;
 const PX = 3;
 
-// Plataformas a lo largo del mundo
-const platforms = [
-  { x: 180,  y: GROUND_Y - 70, w: 78 },
-  { x: 360,  y: GROUND_Y - 110, w: 70 },
-  { x: 540,  y: GROUND_Y - 75, w: 80 },
-  { x: 820,  y: GROUND_Y - 95, w: 90 },
-  { x: 1040, y: GROUND_Y - 70, w: 78 },
-  { x: 1240, y: GROUND_Y - 110, w: 70 },
-  { x: 1420, y: GROUND_Y - 75, w: 80 }
+// ---------- Niveles (campaña tipo plataformero) ----------
+// Cada nivel define segmentos de suelo (todo lo demás es hueco/pit),
+// plataformas saltables, enemigos pre-colocados, posición de la meta,
+// y opcionalmente una pelea de jefes al final del nivel.
+const HORDE_ARENA = {
+  name: 'HORDA', width: 1600,
+  ground: [[0, 1600]],
+  platforms: [
+    { x: 180,  y: GROUND_Y - 70, w: 78 },
+    { x: 360,  y: GROUND_Y - 110, w: 70 },
+    { x: 540,  y: GROUND_Y - 75, w: 80 },
+    { x: 820,  y: GROUND_Y - 95, w: 90 },
+    { x: 1040, y: GROUND_Y - 70, w: 78 },
+    { x: 1240, y: GROUND_Y - 110, w: 70 },
+    { x: 1420, y: GROUND_Y - 75, w: 80 }
+  ],
+  enemies: [], bosses: null, goal: null
+};
+
+const levels = [
+  {
+    name: 'EL ZOCALO',
+    width: 1700,
+    ground: [[0, 1700]],
+    platforms: [
+      { x: 260, y: GROUND_Y - 70, w: 78 },
+      { x: 480, y: GROUND_Y - 100, w: 70 },
+      { x: 740, y: GROUND_Y - 70, w: 80 },
+      { x: 1020, y: GROUND_Y - 95, w: 80 },
+      { x: 1320, y: GROUND_Y - 75, w: 80 }
+    ],
+    enemies: [
+      { type: 'zombie', x: 360 },
+      { type: 'zombie', x: 720 },
+      { type: 'zombie', x: 1120 },
+      { type: 'zombie', x: 1480 }
+    ],
+    goal: 1640
+  },
+  {
+    name: 'EL JARDIN',
+    width: 1900,
+    ground: [
+      [0, 460],
+      [620, 360],
+      [1080, 820]
+    ],
+    platforms: [
+      { x: 230, y: GROUND_Y - 80, w: 70 },
+      { x: 470, y: GROUND_Y - 90, w: 80 },
+      { x: 720, y: GROUND_Y - 100, w: 80 },
+      { x: 980, y: GROUND_Y - 90, w: 70 },
+      { x: 1300, y: GROUND_Y - 100, w: 70 },
+      { x: 1560, y: GROUND_Y - 75, w: 80 }
+    ],
+    enemies: [
+      { type: 'zombie', x: 380 },
+      { type: 'zombie', x: 800 },
+      { type: 'zombie', x: 1250 },
+      { type: 'zombie', x: 1500 },
+      { type: 'zombie', x: 1750 }
+    ],
+    goal: 1840
+  },
+  {
+    name: 'EL ATRIO',
+    width: 2100,
+    ground: [
+      [0, 340],
+      [470, 240],
+      [780, 200],
+      [1070, 290],
+      [1440, 660]
+    ],
+    platforms: [
+      { x: 190, y: GROUND_Y - 80, w: 70 },
+      { x: 370, y: GROUND_Y - 100, w: 70 },
+      { x: 590, y: GROUND_Y - 100, w: 70 },
+      { x: 820, y: GROUND_Y - 110, w: 60 },
+      { x: 1050, y: GROUND_Y - 95, w: 70 },
+      { x: 1310, y: GROUND_Y - 95, w: 70 },
+      { x: 1560, y: GROUND_Y - 80, w: 80 },
+      { x: 1820, y: GROUND_Y - 100, w: 80 }
+    ],
+    enemies: [
+      { type: 'zombie', x: 200 },
+      { type: 'zombie', x: 540 },
+      { type: 'zombie', x: 870 },
+      { type: 'zombie', x: 1180 },
+      { type: 'zombie', x: 1550 },
+      { type: 'zombie', x: 1900 }
+    ],
+    goal: 2040
+  },
+  {
+    name: 'LA CATEDRAL',
+    width: 1400,
+    ground: [[0, 1400]],
+    platforms: [
+      { x: 200, y: GROUND_Y - 85, w: 80 },
+      { x: 470, y: GROUND_Y - 105, w: 80 },
+      { x: 770, y: GROUND_Y - 85, w: 80 },
+      { x: 1050, y: GROUND_Y - 105, w: 80 }
+    ],
+    enemies: [],
+    bosses: ['boss1', 'boss2', 'boss3'],
+    goal: null
+  }
 ];
+
+// Nivel activo (se asigna en startGame)
+let currentLevel = HORDE_ARENA;
+let levelIdx = 0;
+let goalReached = false;
+let levelIntroTimer = 0;
+
+// Detecta si una posición (centerX) cae sobre suelo sólido
+function isOnSolidGround(centerX) {
+  for (const [gx, gw] of currentLevel.ground) {
+    if (centerX >= gx && centerX <= gx + gw) return true;
+  }
+  return false;
+}
+
+// Compatibilidad: drawPlatforms y la física usan esto en lugar del const viejo
+function levelPlatforms() { return currentLevel.platforms; }
 
 // Paleta NES-inspired
 const C = {
@@ -178,6 +294,109 @@ const sfx = {
   throwShot: () => { tone(750, 0.08, 'square', 0.07, 1300); },
   bossShot:  () => { tone(380, 0.1, 'sawtooth', 0.08, 220); }
 };
+
+// ============================================================
+// MUSICA chiptune de fondo (épica/aventura)
+// Loop de 16 compases con melodía + bajo, programada por adelantado
+// ============================================================
+const NOTE = {
+  REST: 0,
+  C3: 130.81, D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.00, A3: 220.00, B3: 246.94,
+  C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00, B4: 493.88,
+  C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.00, B5: 987.77,
+  A2: 110.00, B2: 123.47, E2:  82.41, F2:  87.31, G2:  98.00, C6: 1046.50
+};
+const TEMPO_BPM = 138;
+const EIGHTH = 60 / TEMPO_BPM / 2;
+// Melodía (Am - F - C - G ... pegajoso, estilo aventura)
+const MELODY = [
+  'A4','C5','E5','A5', 'G5','E5','A4','C5',
+  'F4','A4','C5','F5', 'E5','C5','A4','F4',
+  'C4','E4','G4','C5', 'B4','G4','C5','E5',
+  'G3','B3','D4','G4', 'F4','D4','G4','B4',
+  'A4','C5','E5','A5', 'G5','E5','D5','C5',
+  'F4','A4','C5','F5', 'E5','C5','B4','A4',
+  'C4','E4','G4','C5', 'D5','E5','D5','C5',
+  'B4','G4','E4','G4', 'A4','REST','A4','REST'
+];
+const BASS = [
+  'A2','REST','A2','E3', 'A2','REST','A2','E3',
+  'F2','REST','F2','C3', 'F2','REST','F2','C3',
+  'C3','REST','C3','G3', 'C3','REST','C3','G3',
+  'G2','REST','G2','D3', 'G2','REST','G2','D3',
+  'A2','REST','A2','E3', 'A2','REST','A2','E3',
+  'F2','REST','F2','C3', 'F2','REST','F2','C3',
+  'C3','REST','C3','G3', 'C3','REST','E3','G3',
+  'E2','REST','E2','B2', 'A2','REST','A2','REST'
+];
+let musicGain = null;
+let musicNextTime = 0;
+let musicLoopHandle = null;
+let musicEnabled = true;
+let musicStartIdx = 0;
+
+function musicNote(freq, when, dur, type, vol) {
+  if (!actx || !freq) return;
+  const o = actx.createOscillator();
+  const g = actx.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(freq, when);
+  g.gain.setValueAtTime(0, when);
+  g.gain.linearRampToValueAtTime(vol, when + 0.005);
+  g.gain.setValueAtTime(vol * 0.9, when + dur - 0.04);
+  g.gain.linearRampToValueAtTime(0, when + dur);
+  o.connect(g); g.connect(musicGain);
+  o.start(when);
+  o.stop(when + dur);
+}
+
+function scheduleMusic() {
+  if (!actx || !musicEnabled) return;
+  const lookahead = 0.15;
+  while (musicNextTime < actx.currentTime + lookahead) {
+    const i = musicStartIdx % MELODY.length;
+    const mel = NOTE[MELODY[i]];
+    const bas = NOTE[BASS[i]];
+    musicNote(mel, musicNextTime, EIGHTH * 0.9, 'square',   0.04);
+    musicNote(bas, musicNextTime, EIGHTH * 0.95, 'triangle', 0.06);
+    musicStartIdx++;
+    musicNextTime += EIGHTH;
+  }
+}
+
+function startMusic() {
+  if (!musicEnabled) return;
+  ensureAudio();
+  if (!actx) return;
+  if (musicLoopHandle) return;
+  if (!musicGain) {
+    musicGain = actx.createGain();
+    musicGain.gain.value = 0.55;
+    musicGain.connect(actx.destination);
+  }
+  musicStartIdx = 0;
+  musicNextTime = actx.currentTime + 0.1;
+  musicLoopHandle = setInterval(scheduleMusic, 60);
+}
+
+function stopMusic() {
+  if (musicLoopHandle) { clearInterval(musicLoopHandle); musicLoopHandle = null; }
+  if (musicGain) {
+    try {
+      musicGain.gain.cancelScheduledValues(actx.currentTime);
+      musicGain.gain.setValueAtTime(musicGain.gain.value, actx.currentTime);
+      musicGain.gain.linearRampToValueAtTime(0, actx.currentTime + 0.1);
+      setTimeout(() => {
+        if (musicGain) { try { musicGain.disconnect(); } catch (e) {} musicGain = null; }
+      }, 200);
+    } catch (e) { musicGain = null; }
+  }
+}
+function toggleMusic() {
+  musicEnabled = !musicEnabled;
+  if (musicEnabled && state === 'playing') startMusic();
+  else stopMusic();
+}
 
 // ---------- Helpers de dibujo de pixel art ----------
 function px(x, y, w, h, color) {
@@ -452,28 +671,75 @@ function drawLamp(x, y) {
 }
 
 function drawPlaza(camX) {
-  // Tierra/banqueta
-  px(0, GROUND_Y, W, H - GROUND_Y, C.stone1);
-  // Patrón de baldosas
-  const tileW = 24, tileH = 12;
-  const startX = -((camX * 1) | 0) % tileW;
-  for (let y = GROUND_Y; y < H; y += tileH) {
-    for (let x = startX; x < W; x += tileW) {
-      const isAlt = ((((x - startX) / tileW) | 0) + (((y - GROUND_Y) / tileH) | 0)) % 2;
-      px(x, y, tileW - 1, tileH - 1, isAlt ? C.stone1 : C.stone2);
-      px(x, y, tileW - 1, 1, C.stoneEdge);
-    }
-  }
-  // Banqueta superior
-  px(0, GROUND_Y - 2, W, 2, C.stoneEdge);
-  px(0, GROUND_Y, W, 1, C.step);
+  // Fondo del abismo (donde no hay suelo)
+  px(0, GROUND_Y, W, H - GROUND_Y, '#08060e');
 
-  // Lámparas a lo largo
-  const lamps = [60, 220, 380, 540, 740, 900, 1080, 1280, 1460];
+  // Dibuja cada segmento de suelo del nivel actual
+  const tileW = 24, tileH = 12;
+  for (const [gx, gw] of currentLevel.ground) {
+    const sx = gx - camX;
+    if (sx + gw < 0 || sx > W) continue;
+    const drawX = Math.max(0, sx);
+    const drawW = Math.min(W, sx + gw) - drawX;
+    // Banqueta de fondo
+    px(drawX, GROUND_Y, drawW, H - GROUND_Y, C.stone1);
+    // Baldosas
+    const startTile = Math.floor((drawX + camX - gx) / tileW) * tileW + gx - camX;
+    for (let y = GROUND_Y; y < H; y += tileH) {
+      for (let x = startTile; x < drawX + drawW; x += tileW) {
+        if (x + tileW < drawX) continue;
+        const tx = Math.max(drawX, x);
+        const tw = Math.min(drawX + drawW, x + tileW - 1) - tx;
+        if (tw <= 0) continue;
+        const isAlt = ((((x + camX - gx) / tileW) | 0) + (((y - GROUND_Y) / tileH) | 0)) % 2;
+        px(tx, y, tw, tileH - 1, isAlt ? C.stone1 : C.stone2);
+        if (x >= drawX) px(x, y, tileW - 1, 1, C.stoneEdge);
+      }
+    }
+    // Banqueta superior y bordes del segmento (precipicio)
+    px(drawX, GROUND_Y - 2, drawW, 2, C.stoneEdge);
+    px(drawX, GROUND_Y, drawW, 1, C.step);
+    // Borde lateral del precipicio
+    if (sx >= 0 && sx < W) px(sx, GROUND_Y, 2, 8, C.stoneEdge);
+    const rightEdge = sx + gw - 2;
+    if (rightEdge >= 0 && rightEdge < W) px(rightEdge, GROUND_Y, 2, 8, C.stoneEdge);
+  }
+
+  // Lámparas a lo largo del nivel (sólo sobre suelo sólido)
+  const lamps = [60, 220, 380, 540, 740, 900, 1080, 1280, 1460, 1680, 1860, 2040];
   for (const lx of lamps) {
+    if (lx > currentLevel.width - 20) continue;
+    if (!isOnSolidGround(lx)) continue;
     const x = lx - camX;
     if (x < -20 || x > W + 20) continue;
     drawLamp(x, GROUND_Y);
+  }
+}
+
+// Bandera mexicana al final del nivel (meta)
+function drawGoal(camX) {
+  if (mode !== 'campaign' || !currentLevel.goal) return;
+  const gx = currentLevel.goal - camX;
+  if (gx < -20 || gx > W + 20) return;
+  const gy = GROUND_Y;
+  // mástil
+  px(gx, gy - 80, 3, 80, '#a8a8a8');
+  // bandera tricolor ondeando
+  const wave = Math.sin((titleAnim || 0) * 0.2 + gx * 0.05) * 1.5;
+  px(gx + 3, gy - 78 + wave, 12, 8, C.sashGreen);
+  px(gx + 15, gy - 78 + wave, 12, 8, C.sashWhite);
+  px(gx + 27, gy - 78 + wave, 12, 8, C.sashRed);
+  // águila en blanco
+  px(gx + 19, gy - 76 + wave, 4, 4, C.embRed);
+  // base
+  px(gx - 3, gy - 4, 9, 4, '#404048');
+  // estrella "META" parpadeante
+  if ((titleAnim | 0) % 30 < 15) {
+    ctx.fillStyle = C.hudY;
+    ctx.font = '7px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('META', gx + 18, gy - 90);
+    ctx.textAlign = 'left';
   }
 }
 
@@ -1035,7 +1301,8 @@ const bossNames = { boss1: 'EL CABALLERO', boss2: 'EL SABIO', boss3: 'LA DAMA' }
 // ENTIDADES
 // ============================================================
 
-// Física vertical compartida: gravedad + suelo + plataformas (top-solid)
+// Física vertical compartida: gravedad + segmentos de suelo + plataformas
+// Soporte de huecos: si el entity está fuera de un segmento de suelo, sigue cayendo.
 function applyVerticalPhysics(e) {
   const feetPrev = e.y + e.h;
   e.vy += GRAVITY;
@@ -1043,15 +1310,9 @@ function applyVerticalPhysics(e) {
   const feetNow = e.y + e.h;
   e.onGround = false;
 
-  if (feetNow >= GROUND_Y) {
-    e.y = GROUND_Y - e.h;
-    e.vy = 0;
-    e.onGround = true;
-    return;
-  }
-  // Plataformas: solo aterrizar cayendo desde arriba
+  // Plataformas (cualquier nivel): siempre intentar aterrizar desde arriba
   if (e.vy >= 0) {
-    for (const pl of platforms) {
+    for (const pl of levelPlatforms()) {
       const overlapX = e.x + e.w > pl.x + 2 && e.x < pl.x + pl.w - 2;
       if (!overlapX) continue;
       if (feetPrev <= pl.y + 2 && feetNow >= pl.y) {
@@ -1061,6 +1322,18 @@ function applyVerticalPhysics(e) {
         return;
       }
     }
+  }
+
+  // Suelo del nivel: sólo si los pies están sobre un segmento sólido
+  if (feetNow >= GROUND_Y) {
+    const centerX = e.x + e.w / 2;
+    if (isOnSolidGround(centerX)) {
+      e.y = GROUND_Y - e.h;
+      e.vy = 0;
+      e.onGround = true;
+      return;
+    }
+    // Cayendo al hueco — sigue cayendo, el código de update lo maneja
   }
 }
 
@@ -1100,6 +1373,7 @@ function damagePlayer(dmg, knockbackDir) {
       state = 'gameover';
       gameOverTimer = 0;
       saveBests();
+      stopMusic();
       sfx.gameOver();
     } else {
       player.hp = player.maxHp;
@@ -1125,7 +1399,9 @@ function makePlayer() {
     lives: 3,
     score: 0,
     flash: 0,
-    throwCooldown: 0
+    throwCooldown: 0,
+    lastSafeX: 60,
+    lastSafeY: GROUND_Y - 54
   };
 }
 
@@ -1236,7 +1512,7 @@ function saveBests() {
 }
 
 function isBossWave(w) {
-  if (mode === 'campaign') return w === maxWaves;
+  // Solo aplica a horda (campaña usa niveles)
   return w > 0 && w % 5 === 0;
 }
 
@@ -1248,10 +1524,45 @@ function startGame(selectedMode) {
   projectiles = [];
   camera.x = 0;
   wave = 1;
-  waveBanner = 120;
-  setupWave(wave);
+  goalReached = false;
+  levelIntroTimer = 0;
+  if (mode === 'campaign') {
+    levelIdx = 0;
+    loadLevel(levelIdx);
+  } else {
+    currentLevel = HORDE_ARENA;
+    waveBanner = 120;
+    setupWave(wave);
+  }
   state = 'playing';
   sfx.start();
+  startMusic();
+}
+
+function loadLevel(idx) {
+  currentLevel = levels[idx];
+  goalReached = false;
+  levelIntroTimer = 0;
+  waveBanner = 150; // banner del nivel
+  enemies = [];
+  projectiles = [];
+  particles = [];
+  // Reset jugador al inicio del nivel
+  player.x = 60;
+  player.y = GROUND_Y - player.h;
+  player.vx = 0; player.vy = 0;
+  player.lastSafeX = 60;
+  player.lastSafeY = GROUND_Y - player.h;
+  player.hp = Math.min(player.maxHp, player.hp + 2);
+  camera.x = 0;
+  toSpawn = 0;
+  spawnCooldown = 60;
+  // Spawn enemigos pre-colocados
+  for (const e of currentLevel.enemies || []) {
+    if (e.type === 'zombie') enemies.push(makeZombie(e.x));
+  }
+  // Jefes del nivel (si los hay)
+  bossesToSpawn = (currentLevel.bosses || []).slice();
 }
 
 function enemiesForWave(w) {
@@ -1260,17 +1571,12 @@ function enemiesForWave(w) {
 }
 
 function setupWave(w) {
+  // Sólo se usa en horda
   if (isBossWave(w)) {
-    if (mode === 'campaign') {
-      toSpawn = 0;
-      bossesToSpawn = ['boss1', 'boss2', 'boss3'];
-    } else {
-      // Horda: 1 jefe rotando + algunos morezombis
-      const bossOrder = ['boss1', 'boss2', 'boss3'];
-      const idx = Math.floor(w / 5 - 1) % 3;
-      bossesToSpawn = [bossOrder[(idx + 3) % 3]];
-      toSpawn = Math.min(3 + Math.floor(w / 4), 6);
-    }
+    const bossOrder = ['boss1', 'boss2', 'boss3'];
+    const idx = Math.floor(w / 5 - 1) % 3;
+    bossesToSpawn = [bossOrder[(idx + 3) % 3]];
+    toSpawn = Math.min(3 + Math.floor(w / 4), 6);
   } else {
     toSpawn = enemiesForWave(w);
     bossesToSpawn = [];
@@ -1280,17 +1586,24 @@ function setupWave(w) {
 
 function nextWave() {
   wave++;
-  if (mode === 'campaign' && wave > maxWaves) {
-    state = 'win';
-    winTimer = 0;
-    saveBests();
-    sfx.win();
-    return;
-  }
   waveBanner = isBossWave(wave) ? 180 : 120;
   setupWave(wave);
   sfx.wave();
   player.hp = Math.min(player.maxHp, player.hp + 2);
+}
+
+function nextLevel() {
+  levelIdx++;
+  if (levelIdx >= levels.length) {
+    state = 'win';
+    winTimer = 0;
+    saveBests();
+    stopMusic();
+    sfx.win();
+    return;
+  }
+  loadLevel(levelIdx);
+  sfx.wave();
 }
 
 // ============================================================
@@ -1332,6 +1645,16 @@ function update() {
 
   // ----- PLAYING -----
   if (waveBanner > 0) waveBanner--;
+
+  // Si llegamos a la meta, esperamos un momento y avanzamos al siguiente nivel
+  if (mode === 'campaign' && goalReached) {
+    levelIntroTimer--;
+    if (levelIntroTimer <= 0) {
+      nextLevel();
+      clearOnce();
+      return;
+    }
+  }
 
   updatePlayer();
   updateEnemies();
@@ -1411,13 +1734,51 @@ function updatePlayer() {
   if (p.punchTimer > 0) p.punchTimer--;
   if (p.throwCooldown > 0) p.throwCooldown--;
 
-  // física vertical con plataformas
+  // física vertical (incluye huecos)
   p.x += p.vx;
   applyVerticalPhysics(p);
 
-  // límites
+  // límites del nivel actual
+  const lvlW = currentLevel.width;
   if (p.x < 0) p.x = 0;
-  if (p.x + p.w > WORLD_W) p.x = WORLD_W - p.w;
+  if (p.x + p.w > lvlW) p.x = lvlW - p.w;
+
+  // Posición segura: recordar el último sitio firme en suelo o plataforma
+  if (p.onGround) {
+    p.lastSafeX = p.x;
+    p.lastSafeY = p.y;
+  }
+  // Caída al hueco: respawn con -1 hp
+  if (p.y > H + 40) {
+    p.hp = Math.max(0, p.hp - 1);
+    sfx.hurt();
+    if (p.hp <= 0) {
+      p.lives--;
+      if (p.lives <= 0) {
+        state = 'gameover';
+        gameOverTimer = 0;
+        saveBests();
+        stopMusic();
+        sfx.gameOver();
+        return;
+      }
+      p.hp = p.maxHp;
+    }
+    p.x = p.lastSafeX || 60;
+    p.y = (p.lastSafeY || GROUND_Y - p.h) - 40;
+    p.vx = 0; p.vy = 0;
+    p.invuln = 90;
+    p.flash = 30;
+  }
+
+  // Meta del nivel (solo en campaña)
+  if (mode === 'campaign' && currentLevel.goal && !goalReached
+      && p.x + p.w / 2 >= currentLevel.goal) {
+    goalReached = true;
+    levelIntroTimer = 90;
+    p.score += 500;
+    sfx.wave();
+  }
 
   // estado para animación
   if (p.hurtTimer > 0) p.state = 'hurt';
@@ -1525,21 +1886,35 @@ function updateEnemies() {
   // remover muertos
   enemies = enemies.filter(e => !(e.dead && e.deathTimer <= 0));
 
-  // check fin de oleada
-  if (toSpawn === 0 && bossesToSpawn.length === 0 && enemies.length === 0 && state === 'playing' && waveBanner === 0) {
-    nextWave();
+  // Fin de oleada/nivel
+  if (state !== 'playing') return;
+  if (mode === 'horde') {
+    if (toSpawn === 0 && bossesToSpawn.length === 0 && enemies.length === 0 && waveBanner === 0) {
+      nextWave();
+    }
+  } else {
+    // Campaña: si es el nivel de jefes y todos vencidos -> victoria
+    if (currentLevel.bosses && bossesToSpawn.length === 0
+        && enemies.length === 0 && waveBanner === 0 && !goalReached) {
+      state = 'win';
+      winTimer = 0;
+      saveBests();
+      stopMusic();
+      sfx.win();
+    }
   }
 }
 
 function updateSpawning() {
+  const lvlW = currentLevel.width;
   if (toSpawn > 0) {
     spawnCooldown--;
     if (spawnCooldown <= 0 && enemies.filter(e => !e.dead).length < 4) {
-      // spawn desde un lado
+      // spawn desde un lado (sólo horda)
       const fromLeft = Math.random() < 0.4;
       const sx = fromLeft
         ? Math.max(camera.x - 30, 0)
-        : Math.min(camera.x + W + 30, WORLD_W - 30);
+        : Math.min(camera.x + W + 30, lvlW - 30);
       enemies.push(makeZombie(sx));
       toSpawn--;
       spawnCooldown = 70 + Math.random() * 60;
@@ -1552,7 +1927,7 @@ function updateSpawning() {
       const fromLeft = bossesToSpawn.length === 1;
       const sx = fromLeft
         ? Math.max(camera.x - 30, 10)
-        : Math.min(camera.x + W + 30, WORLD_W - 30);
+        : Math.min(camera.x + W + 30, lvlW - 30);
       enemies.push(makeBoss(sx, kind));
       spawnCooldown = 90;
     }
@@ -1601,11 +1976,12 @@ function updateParticles() {
 }
 
 function updateCamera() {
-  // cámara sigue al jugador con margen
+  const lvlW = currentLevel.width;
   const target = player.x - W / 2 + player.w / 2;
   camera.x += (target - camera.x) * 0.1;
   if (camera.x < 0) camera.x = 0;
-  if (camera.x > WORLD_W - W) camera.x = WORLD_W - W;
+  const maxCam = Math.max(0, lvlW - W);
+  if (camera.x > maxCam) camera.x = maxCam;
 }
 
 // ============================================================
@@ -1629,7 +2005,10 @@ function render() {
   drawCathedral(bgCam);
   drawPalms(bgCam);
   drawPlaza(bgCam);
-  if (state !== 'title') drawPlatforms(camera.x);
+  if (state !== 'title') {
+    drawPlatforms(camera.x);
+    drawGoal(camera.x);
+  }
 
   // entidades solo en juego
   if (state !== 'title') {
@@ -1646,11 +2025,12 @@ function render() {
   if (state === 'title') drawTitle();
   else if (state === 'gameover') drawGameOver();
   else if (state === 'win') drawWin();
+  else if (mode === 'campaign' && goalReached) drawGoalBanner();
   else if (waveBanner > 0) drawWaveBanner();
 }
 
 function drawPlatforms(camX) {
-  for (const p of platforms) {
+  for (const p of levelPlatforms()) {
     const x = p.x - camX;
     if (x + p.w < 0 || x > W) continue;
     // losa superior
@@ -1798,9 +2178,16 @@ function drawHUD() {
     drawMiniHero(56 + i * 12, 20);
   }
 
-  // Wave
+  // Indicador de progreso
   ctx.fillStyle = C.hudY;
-  ctx.fillText('OLEADA ' + wave + (mode === 'campaign' ? '/' + maxWaves : ''), 220, 6);
+  if (mode === 'campaign') {
+    ctx.fillText('NIVEL ' + (levelIdx + 1) + '/' + levels.length, 200, 6);
+    ctx.font = '7px "Press Start 2P", monospace';
+    ctx.fillText(currentLevel.name, 200, 22);
+    ctx.font = '10px "Press Start 2P", monospace';
+  } else {
+    ctx.fillText('OLEADA ' + wave, 220, 6);
+  }
 
   // Score
   ctx.fillStyle = C.hudG;
@@ -1912,23 +2299,51 @@ function drawTitle() {
 }
 
 function drawWaveBanner() {
-  const boss = isBossWave(wave);
-  const total = boss ? 180 : 120;
+  // Banner contextual: campaña usa NIVEL N, horda usa OLEADA N
+  let total, title, sub, accentColor;
+  if (mode === 'campaign') {
+    total = 150;
+    const isBossLvl = !!currentLevel.bosses;
+    title = isBossLvl ? 'NIVEL FINAL' : 'NIVEL ' + (levelIdx + 1);
+    sub = currentLevel.name + (isBossLvl ? ' - LOS JEFES TE ESPERAN' : '');
+    accentColor = isBossLvl ? C.embRed : C.hudY;
+  } else {
+    const boss = isBossWave(wave);
+    total = boss ? 180 : 120;
+    title = 'OLEADA ' + wave;
+    sub = boss ? 'LLEGAN LOS JEFES DE MORENA' : 'LOS MOREZOMBIS ATACAN';
+    accentColor = boss ? C.embRed : C.hudY;
+  }
   const a = waveBanner / total;
   ctx.fillStyle = `rgba(0,0,0,${0.55 * a})`;
   ctx.fillRect(0, 140, W, 80);
-  ctx.fillStyle = boss ? C.embRed : C.heroMaskR;
+  ctx.fillStyle = accentColor;
   ctx.fillRect(0, 140, W, 3);
   ctx.fillRect(0, 217, W, 3);
 
-  const isFinal = (mode === 'campaign' && wave === maxWaves);
   ctx.textAlign = 'center';
   ctx.font = '18px "Press Start 2P", monospace';
-  ctx.fillStyle = boss ? C.embRed : C.hudY;
-  ctx.fillText(isFinal ? 'OLEADA FINAL' : 'OLEADA ' + wave, W / 2, 165);
-  ctx.font = '10px "Press Start 2P", monospace';
+  ctx.fillStyle = accentColor;
+  ctx.fillText(title, W / 2, 165);
+  ctx.font = '9px "Press Start 2P", monospace';
   ctx.fillStyle = C.white;
-  ctx.fillText(boss ? 'LLEGAN LOS JEFES DE MORENA' : 'LOS MOREZOMBIS ATACAN', W / 2, 195);
+  ctx.fillText(sub, W / 2, 195);
+  ctx.textAlign = 'left';
+}
+
+function drawGoalBanner() {
+  ctx.fillStyle = 'rgba(10, 40, 10, 0.55)';
+  ctx.fillRect(0, 150, W, 70);
+  ctx.fillStyle = C.hudG;
+  ctx.fillRect(0, 150, W, 3);
+  ctx.fillRect(0, 217, W, 3);
+  ctx.textAlign = 'center';
+  ctx.font = '20px "Press Start 2P", monospace';
+  ctx.fillStyle = C.hudY;
+  ctx.fillText('META!', W / 2, 175);
+  ctx.font = '8px "Press Start 2P", monospace';
+  ctx.fillStyle = C.white;
+  ctx.fillText('+500 PTS  -  AVANZANDO...', W / 2, 200);
   ctx.textAlign = 'left';
 }
 
